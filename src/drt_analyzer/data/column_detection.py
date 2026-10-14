@@ -1,0 +1,60 @@
+import re
+import unicodedata
+
+
+class ImportErrorDetail(ValueError):
+    pass
+
+
+class SignAmbiguity(ImportErrorDetail):
+    """The file cannot establish the imaginary convention without user input."""
+
+
+def normalized(text):
+    return unicodedata.normalize("NFKC", str(text)).strip().lower().replace("−", "-").replace("′", "'")
+
+
+def column_kind(header):
+    s = normalized(header)
+    s = re.sub(r"\([^)]*\)|\[[^]]*\]", "", s)
+    s = re.sub(r"/\s*(?:hz|ohms?|ω|ом|гц)\b.*$", "", s)
+    s = s.split(",")[0].strip()
+    compact = re.sub(r"[\s_\-./]", "", s)
+    if compact in {"f", "hz", "freq", "frequency", "frequencyhz", "freqhz", "частота"}:
+        return "f"
+    if compact in {"re", "zre", "rez", "real", "zreal", "realz", "z'", "z′"}:
+        return "re"
+    if compact in {"im", "zim", "imz", "imag", "imaginary", "zimag", "zimaginary", "z''", "z″"}:
+        return "im"
+    return None
+
+
+def detect_columns(headers):
+    result = {}
+    for i, header in enumerate(headers):
+        kind = column_kind(header)
+        if kind:
+            if kind in result:
+                raise ImportErrorDetail(f"Ambiguous {kind} columns: {headers[result[kind]]!r}, {header!r}.")
+            result[kind] = i
+    if len(result) != 3:
+        raise ImportErrorDetail("Cannot uniquely identify frequency, Re(Z), Im(Z). "
+                                f"Headers: {list(headers)!r}. Use explicit column names.")
+    return tuple(result[k] for k in ("f", "re", "im"))
+
+
+def imaginary_sign(header, values, override=None):
+    if override is not None:
+        if override not in (-1, 1):
+            raise ValueError("im_multiplier must be +1 or -1.")
+        return override, "user-confirmed"
+    s = normalized(header)
+    if s.startswith("-"):
+        return -1, "explicit negative imaginary header"
+    # Positive Im can be physical induction OR a legacy -Im export. Do not guess.
+    import numpy as np
+    if np.count_nonzero(values > 0) > len(values) * 0.6:
+        raise SignAmbiguity("The Im column is predominantly positive. This may be genuine "
+                            "induction or an export of -Im(Z). Confirm its convention; "
+                            "a capacitive spectrum normally has Im(Z) < 0.")
+    return 1, "explicit Im header; no sign inversion"

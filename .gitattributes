@@ -1,0 +1,2 @@
+# Preserve original scientific measurement bytes and their existing formatting.
+data_test/** -text whitespace=-blank-at-eol,-blank-at-eof
