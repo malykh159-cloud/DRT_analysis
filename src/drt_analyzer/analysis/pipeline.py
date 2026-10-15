@@ -16,7 +16,7 @@ from .rp import integrate_rp
 def auto_settings(frequency_min_hz=None, frequency_max_hz=None):
     from ..drt.base import AnalysisSettings
     return AnalysisSettings(mode="Auto", lambda_method="rGCV", derivative_order=2,
-                            rbf="Gaussian", shape_mode="Auto", validation=True,
+                            rbf="Gaussian", shape_mode="Manual", shape_value=6., validation=True,
                             frequency_min_hz=frequency_min_hz, frequency_max_hz=frequency_max_hz)
 
 

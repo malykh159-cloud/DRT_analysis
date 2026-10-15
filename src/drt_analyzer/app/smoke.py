@@ -8,9 +8,12 @@ from PySide6 import QtCore, QtWidgets as QtW
 from ..data.models import RawSpectrum, ImportInfo
 from ..drt.base import AnalysisSettings
 from ..analysis.pipeline import analyze
-from ..export.tables import export_xlsx, export_csv_bundle
+from ..export.tables import export_xlsx, export_txt_bundle
 from ..export.settings import export_settings
 from ..export.plots import export_plot
+from ..export.batch import export_batch
+from ..data.importers import load_spectrum
+from ..ui.export_dialog import ExportDialog
 from .main_window import Entry
 from .. import __version__
 
@@ -44,11 +47,26 @@ def run_smoke(window, output):
     QtW.QApplication.processEvents()
     window.grab().save(str(output/"workspace.png"))
     for name, item in window.plots.all_plots().items():
-        for suffix in ("png", "svg"):
+        for suffix in ("png",):
             export_plot(item, output/f"{name}.{suffix}")
     export_xlsx(output/"results.xlsx", [(raw, v)])
-    export_csv_bundle(output/"csv", [(raw, v)])
+    export_txt_bundle(output/"txt", [(raw, v)])
     export_settings(output/"settings.json", raw, v)
+    # Verify 0.3.0 paths in the frozen runtime, including headerless TXT import.
+    source = output/"headerless.txt"
+    np.savetxt(source, np.column_stack((f, z.real, z.imag)), delimiter="\t")
+    imported = load_spectrum(source)
+    np.testing.assert_array_equal(imported.frequency, f)
+    assert imported.info.header_row == 0
+    assert window.settings.shape_mode.currentText() == "Manual" and window.settings.shape.value() == 6
+    window.settings.lambda_method.setCurrentText("rGCV")
+    window.settings.lambda_value.textEdited.emit("0.001")
+    assert window.settings.lambda_method.currentText() == "Manual"
+    dialog = ExportDialog(2, 1, window)
+    assert dialog.plot_types() == ["Nyquist", "DRT"]
+    export_batch(output/"batch", [(raw, v), (raw, second)], txt=True, plot_types=dialog.plot_types())
+    assert len(list((output/"batch"/"plots").glob("*.png"))) == 4
+    dialog.close()
     # Exercise the six 0.2.0 user-facing additions in the frozen executable too.
     ranged = analyze(raw, replace(settings, frequency_min_hz=float(f[-8]), frequency_max_hz=float(f[5])))
     window.result_ready(0, ranged)
@@ -85,7 +103,8 @@ def run_smoke(window, output):
               "python_executable": sys.executable, "rp_total": v.rp_total, "peaks": len(v.peaks),
               "relative_rms": v.quality["relative_rms"], "kk_status": v.kk.status,
               "lambda": v.lambda_value, "shape": v.shape_value,
-              "undo_redo": "passed", "plots": 14, "frequency_range_points_used": len(ranged.frequency),
+              "undo_redo": "passed", "plots": 7, "frequency_range_points_used": len(ranged.frequency),
               "sign_majority": "passed", "delete_history": "passed", "delete_spectra": "passed",
               "parameter_help": "passed", "frequency_hover": "passed"}
+    result.update(headerless_import="passed", bulk_export="passed", manual_settings="passed")
     (output/"smoke_result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")

@@ -102,3 +102,25 @@ def test_real_examples():
         raw = load_spectrum(path)
         assert len(raw.frequency) >= 8
         assert np.isfinite(raw.impedance).all()
+
+
+@pytest.mark.parametrize("sep", ["\t", ";", ",", " "])
+@pytest.mark.parametrize("encoding", ["utf-8-sig", "utf-16"])
+@pytest.mark.parametrize("sign", [-1, 1])
+def test_headerless_drttools(tmp_path, sep, encoding, sign):
+    path = tmp_path/"drttools.txt"
+    path.write_text("\n".join(sep.join([str(i+1), "12.3", str(sign*(i+1))]) for i in range(10)), encoding=encoding)
+    before = path.read_bytes()
+    raw = load_spectrum(path)
+    assert raw.info.header_row == 0
+    np.testing.assert_array_equal(raw.frequency, np.arange(1, 11))
+    np.testing.assert_array_equal(raw.impedance.imag, -np.arange(1, 11))
+    assert path.read_bytes() == before
+
+
+def test_headerless_rejects_missing_or_extra_columns(tmp_path):
+    path = tmp_path/"bad.txt"
+    for row in ("2\t3", "2\t3\t-4\t5", "2\tbad\t-4"):
+        path.write_text("1\t3\t-4\n"+row+"\n"+"\n".join(f"{i}\t3\t-4" for i in range(3, 11)))
+        with pytest.raises(ImportErrorDetail):
+            load_spectrum(path)

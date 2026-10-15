@@ -13,7 +13,7 @@ import json
 import time
 from drt_analyzer.data.importers import load_spectrum
 from drt_analyzer.analysis.pipeline import analyze, auto_settings
-from drt_analyzer.export.tables import export_xlsx, export_csv_bundle
+from drt_analyzer.export.tables import export_xlsx, export_txt_bundle
 
 
 def main():
@@ -44,7 +44,7 @@ def main():
               "results": records}
     (output/"report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     export_xlsx(output/"real_data_results.xlsx", pairs)
-    export_csv_bundle(output/"csv", pairs)
+    export_txt_bundle(output/"txt", pairs)
     assert unchanged, "Source measurements changed"
     assert len(pairs) == len(files), "Some spectra failed; inspect report.json"
 

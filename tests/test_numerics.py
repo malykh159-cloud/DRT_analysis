@@ -11,7 +11,7 @@ from drt_analyzer.validation.inductance import detect_inductance
 from drt_analyzer.validation.linkk import lin_kk
 
 
-MANUAL = AnalysisSettings(lambda_method="Manual", lambda_value=1e-6, validation=False)
+MANUAL = AnalysisSettings(lambda_method="Manual", lambda_value=1e-6, validation=False, shape_mode="Auto")
 
 
 def test_single_rc_known_peak_and_rp(rc):

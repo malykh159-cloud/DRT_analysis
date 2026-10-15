@@ -21,8 +21,8 @@ class AnalysisSettings:
     lambda_max_exp: float = 2
     lambda_count: int = 41
     rbf: str = "Gaussian"
-    shape_mode: str = "Auto"
-    shape_value: float = 1.0
+    shape_mode: str = "Manual"
+    shape_value: float = 6.0
     derivative_order: int = 2
     validation: bool = True
     kk_mu: float = 0.85

@@ -1,8 +1,7 @@
 import csv
-import json
 import re
 from pathlib import Path
-from .settings import metadata, export_settings
+from .settings import metadata
 
 
 def safe_cell(value):
@@ -12,31 +11,22 @@ def safe_cell(value):
     return value
 
 
-def write_csv(path, rows):
+def write_txt(path, rows):
     with open(path, "w", newline="", encoding="utf-8-sig") as stream:
-        writer = csv.writer(stream)
+        writer = csv.writer(stream, delimiter="\t")
         writer.writerows([[safe_cell(v) for v in row] for row in rows])
 
 
 def summary_rows(pairs):
     max_peaks = max((len(v.peaks) for _, v in pairs), default=0)
-    header = ["File", "Rp total (Ohm)", "Peak count", "DRT method", "Lambda method", "Lambda",
-              "RBF", "Shape epsilon (1/ln tau)", "Derivative order", "Relative RMS",
-              "RMS Re (Ohm)", "RMS Im (Ohm)", "Lin-KK status", "Rs (Ohm)", "L (H)", "Warnings",
-              "Used f min (Hz)", "Used f max (Hz)", "Source points", "Used points",
-              "Requested f min (Hz)", "Requested f max (Hz)"]
+    header = ["File", "Rs (Ohm)", "Rp total (Ohm)", "Lambda"]
     for i in range(1, max_peaks+1):
-        header.extend([f"Peak {i} tau (s)", f"Peak {i} f (Hz)", f"Peak {i} Rp (Ohm)", f"Peak {i} edge"])
+        header.append(f"Peak {i} Rp (Ohm)")
     rows = [header]
     for raw, v in pairs:
-        row = [raw.name, v.rp_total, len(v.peaks), v.settings.method, v.settings.lambda_method,
-               v.lambda_value, v.settings.rbf, v.shape_value, v.settings.derivative_order,
-               v.quality["relative_rms"], v.quality["rms_real_ohm"], v.quality["rms_imag_ohm"],
-               v.kk.status if v.kk else "Not run", v.rs_ohm, v.inductance_h, " | ".join(v.warnings),
-               float(v.frequency.min()), float(v.frequency.max()), len(raw.frequency), len(v.frequency),
-               v.settings.frequency_min_hz, v.settings.frequency_max_hz]
+        row = [raw.name, v.rs_ohm, v.rp_total, v.lambda_value]
         for peak in v.peaks:
-            row.extend([peak.tau_s, peak.frequency_hz, peak.rp_ohm, peak.edge])
+            row.append(peak.rp_ohm)
         rows.append(row+[""]*(len(header)-len(row)))
     return rows
 
@@ -96,30 +86,39 @@ def export_xlsx(path, pairs):
     for row in summary_rows(pairs):
         ws.append([safe_cell(v) for v in row])
     meta = wb.create_sheet("Settings")
-    meta.append(["File", "Parameter", "Value (JSON)"])
+    meta.append(["File", "Parameter", "Value"])
     for n, (raw, v) in enumerate(pairs, 1):
         for title, rows in detail_tables(raw, v).items():
             sheet = wb.create_sheet(f"{n} {title}"[:31])
             for row in rows:
                 sheet.append([safe_cell(value.item() if hasattr(value, "item") else value) for value in row])
-        for key, value in metadata(raw, v).items():
-            # Split large JSON (e.g. scan arrays) into chunks below Excel's 32767-char limit.
-            encoded = json.dumps(value, ensure_ascii=False, allow_nan=False)
-            for chunk in range(0, max(1, len(encoded)), 30000):
-                meta.append([safe_cell(raw.name), key if chunk == 0 else f"{key} continued", safe_cell(encoded[chunk:chunk+30000])])
+        for key, value in settings_rows(metadata(raw, v)):
+            meta.append([safe_cell(raw.name), safe_cell(key), safe_cell(value)])
     for sheet in wb.worksheets:
         _format_sheet(sheet)
     wb.save(path)
 
 
-def export_csv_bundle(directory, pairs):
+def settings_rows(values, prefix=""):
+    for key, value in values.items():
+        name = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            yield from settings_rows(value, name)
+        elif isinstance(value, (list, tuple)):
+            for index, item in enumerate(value):
+                yield from settings_rows({str(index+1): item}, name)
+        else:
+            yield name, value
+
+
+def export_txt_bundle(directory, pairs):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     pairs = list(pairs)
-    write_csv(directory/"summary.csv", summary_rows(pairs))
+    write_txt(directory/"summary.txt", summary_rows(pairs))
     for index, (raw, v) in enumerate(pairs, 1):
         stem = re.sub(r'[<>:"/\\|?*]', "_", Path(raw.name).stem)[:70]
         prefix = f"{index:03d}_{stem}_{v.id[:8]}"
         for name, rows in detail_tables(raw, v).items():
-            write_csv(directory/f"{prefix}_{name.replace(' ', '_')}.csv", rows)
-        export_settings(directory/f"{prefix}_settings.json", raw, v)
+            write_txt(directory/f"{prefix}_{name.replace(' ', '_')}.txt", rows)
+        write_txt(directory/f"{prefix}_settings.txt", [["Parameter", "Value"], *settings_rows(metadata(raw, v))])

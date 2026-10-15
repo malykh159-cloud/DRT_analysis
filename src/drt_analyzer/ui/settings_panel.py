@@ -25,6 +25,7 @@ class SettingsPanel(QtW.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._base = AnalysisSettings()
+        self._loading = False
         layout = QtW.QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         self.mode = QtW.QLabel("MANUAL · editable settings")
@@ -39,9 +40,9 @@ class SettingsPanel(QtW.QWidget):
             return form
 
         form = section("METHOD")
-        method = combo(["Tikhonov", "Bayesian DRT — unavailable"])
+        method = combo(["Tikhonov", "Bayesian DRT — not implemented"])
         method.model().item(1).setEnabled(False)
-        method.setItemData(1, "Reserved for a validated likelihood, prior and posterior sampler.", QtCore.Qt.ItemDataRole.ToolTipRole)
+        method.setItemData(1, "Алгоритм пока не реализован: в коде только заглушка. Установка дополнительных пакетов не включит этот метод.", QtCore.Qt.ItemDataRole.ToolTipRole)
         add_parameter(form, "DRT", method, "method")
         positive = QtW.QLabel("γ(τ) ≥ 0 · separate series L")
         form.addRow(positive)
@@ -85,7 +86,7 @@ class SettingsPanel(QtW.QWidget):
         self.rbf = combo(RBF_NAMES, "Positive radial basis functions in ln τ. "
                          "Choice affects resolution and smoothness; compare stability across bases.")
         self.shape_mode = combo(["Auto", "Manual"])
-        self.shape = spin(.05, 100, 1, 6)
+        self.shape = spin(.05, 100, 6, 6)
         self.shape.setToolTip("ε scales distance in ln τ: larger ε gives narrower basis functions. "
                              "Auto: full width at half maximum equals one center spacing.")
         add_parameter(form, "Basis", self.rbf, "rbf")
@@ -125,16 +126,37 @@ class SettingsPanel(QtW.QWidget):
         add_parameter(form, "Prominence (%)", self.prominence, "peak_prominence")
         add_parameter(form, "Min distance (dec)", self.distance, "peak_distance")
         layout.addStretch()
-        self.lambda_method.currentTextChanged.connect(self._availability)
-        self.shape_mode.currentTextChanged.connect(self._availability)
-        self.frequency_range.toggled.connect(self._availability)
+        self.lambda_value.textEdited.connect(self._manual_lambda)
+        self.shape.valueChanged.connect(self._manual_shape)
+        self.frequency_min.textEdited.connect(self._manual_range)
+        self.frequency_max.textEdited.connect(self._manual_range)
+        for control in (self.lambda_method, self.order, self.rbf, self.shape_mode):
+            control.activated.connect(self._edited)
+        for control in (self.scan_min, self.scan_max, self.scan_count, self.kk_mu,
+                        self.kk_rms, self.kk_max, self.kk_density, self.prominence, self.distance):
+            control.valueChanged.connect(self._edited)
+        for control in (self.validation, self.kk_cap, self.frequency_range):
+            control.clicked.connect(self._edited)
         self.load(self._base)
 
-    def _availability(self, *_):
-        self.lambda_value.setEnabled(self.lambda_method.currentText() == "Manual")
-        self.shape.setEnabled(self.shape_mode.currentText() == "Manual")
-        self.frequency_min.setEnabled(self.frequency_range.isChecked())
-        self.frequency_max.setEnabled(self.frequency_range.isChecked())
+    def _edited(self, *_):
+        if not self._loading:
+            self.mode.setText("MANUAL · settings changed")
+
+    def _manual_lambda(self, *_):
+        if not self._loading:
+            self.lambda_method.setCurrentText("Manual")
+            self._edited()
+
+    def _manual_shape(self, *_):
+        if not self._loading:
+            self.shape_mode.setCurrentText("Manual")
+            self._edited()
+
+    def _manual_range(self, *_):
+        if not self._loading:
+            self.frequency_range.setChecked(True)
+            self._edited()
 
     def set_source_range(self, raw):
         if raw is None:
@@ -171,6 +193,7 @@ class SettingsPanel(QtW.QWidget):
         return settings
 
     def load(self, settings, actual=None):
+        self._loading = True
         self._base = settings
         self.frequency_range.setChecked(settings.frequency_min_hz is not None or settings.frequency_max_hz is not None)
         if settings.frequency_min_hz is not None:
@@ -187,7 +210,7 @@ class SettingsPanel(QtW.QWidget):
         self.order.setCurrentText(str(settings.derivative_order))
         self.rbf.setCurrentText(settings.rbf)
         self.shape_mode.setCurrentText(settings.shape_mode)
-        self.shape.setValue(settings.shape_value)
+        self.shape.setValue(actual.shape_value if actual and settings.shape_mode == "Auto" else settings.shape_value)
         self.actual_shape.setText(f"{actual.shape_value:.7g}" if actual else "calculated from grid")
         self.validation.setChecked(settings.validation)
         self.kk_mu.setValue(settings.kk_mu)
@@ -197,4 +220,4 @@ class SettingsPanel(QtW.QWidget):
         self.kk_cap.setChecked(settings.kk_add_capacitance)
         self.prominence.setValue(100*settings.peak_prominence)
         self.distance.setValue(settings.peak_distance_decades)
-        self._availability()
+        self._loading = False

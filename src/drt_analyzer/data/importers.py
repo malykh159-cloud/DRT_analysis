@@ -16,7 +16,13 @@ def number(value):
 
 
 def _text_rows(blob):
-    for encoding in ("utf-8-sig", "cp1251", "cp1252"):
+    if blob.startswith((b'\xff\xfe\x00\x00', b'\x00\x00\xfe\xff')):
+        encodings = ("utf-32",)
+    elif blob.startswith((b'\xff\xfe', b'\xfe\xff')):
+        encodings = ("utf-16",)
+    else:
+        encodings = ("utf-8-sig", "cp1251", "cp1252")
+    for encoding in encodings:
         try:
             text = blob.decode(encoding)
             break
@@ -46,8 +52,26 @@ def _text_rows(blob):
                 continue
             rows = [(n, split(s)) for n, s in enumerate(lines[rownum:], rownum + 1) if s.strip()]
             return headers, indices, rows, encoding, delimiter, rownum
-    raise ImportErrorDetail("No unambiguous frequency/Re/Im header in the first 100 lines. "
-                            "Supported separators: semicolon, tab, comma, multiple spaces.")
+    # Standard DRTtools export: exactly three numeric columns, without a header.
+    # Do not infer positions for arbitrary extra columns (e.g. an index column).
+    nonempty = [(n, s) for n, s in enumerate(lines, 1) if s.strip()]
+    if nonempty:
+        for delimiter in (";", "\t", ",", "space"):
+            split = (lambda s: re.split(r"\s+", s.strip())) if delimiter == "space" else (
+                lambda s, d=delimiter: next(csv.reader([s], delimiter=d)))
+            first = split(nonempty[0][1])
+            try:
+                valid_first = len(first) == 3 and all(np.isfinite(number(v)) for v in first)
+            except (ValueError, TypeError):
+                valid_first = False
+            if valid_first:
+                rows = [(n, split(s)) for n, s in nonempty]
+                for rownum, row in rows:
+                    if len(row) != 3:
+                        raise ImportErrorDetail(f"Headerless DRTtools format requires exactly 3 columns; row {rownum} has {len(row)}.")
+                return ["Frequency (Hz)", "Re(Z)", "Im(Z)"], (0, 1, 2), rows, encoding, delimiter, 0
+    raise ImportErrorDetail("Cannot identify EIS columns. Use frequency/Re/Im headers, or exactly "
+                            "three numeric columns without a header in DRTtools order: frequency, Re(Z), Im(Z).")
 
 
 def load_spectrum(path, im_multiplier=None):

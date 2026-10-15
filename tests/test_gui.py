@@ -56,7 +56,7 @@ def test_window_history_plots_and_export(app, rc, tmp_path):
     window.plots.compare([(rc, b)])
     app.processEvents()
     for name, plot in window.plots.all_plots().items():
-        for suffix in ("png", "svg"):
+        for suffix in ("png",):
             path = tmp_path/f"{name}.{suffix}"
             export_plot(plot, path)
             assert path.stat().st_size > 500
@@ -242,3 +242,46 @@ def test_frequency_readouts_and_hidden_comparison_curves(app, rc):
     compare.mouse_moved(scene_pos)
     assert compare.cursor_frequency is None
     window.close()
+
+
+def test_editing_auto_values_switches_only_corresponding_mode(app):
+    from drt_analyzer.ui.settings_panel import SettingsPanel
+    panel = SettingsPanel()
+    assert panel.shape_mode.currentText() == "Manual" and panel.shape.value() == 6
+    panel.load(AnalysisSettings(mode="Auto", lambda_method="rGCV", shape_mode="Auto"))
+    assert panel.lambda_value.isEnabled() and panel.shape.isEnabled()
+    assert panel.frequency_min.isEnabled() and panel.frequency_max.isEnabled()
+    panel.lambda_value.selectAll()
+    QtTest.QTest.keyClicks(panel.lambda_value, "0.02")
+    assert panel.lambda_method.currentText() == "Manual"
+    assert panel.shape_mode.currentText() == "Auto"
+    panel.shape.setValue(7)
+    assert panel.shape_mode.currentText() == "Manual"
+    panel.frequency_min.selectAll()
+    QtTest.QTest.keyClicks(panel.frequency_min, "1")
+    assert panel.frequency_range.isChecked()
+    panel.load(AnalysisSettings(shape_mode="Auto"))
+    assert panel.shape_mode.currentText() == "Auto"  # loading history is not a user edit
+    panel.close()
+
+
+def test_bulk_export_all_formats_and_graph_choices(app, rc, tmp_path):
+    from drt_analyzer.export.batch import export_batch
+    from drt_analyzer.ui.export_dialog import ExportDialog, PLOT_TYPES
+    from openpyxl import load_workbook
+    dialog = ExportDialog(2, 1)
+    assert dialog.scope.currentIndex() == 0
+    assert dialog.plot_types() == ["Nyquist", "DRT"]
+    a = analyze(rc, AnalysisSettings(lambda_method="Manual", lambda_value=1e-6))
+    b = analyze(rc, replace(a.settings, lambda_value=.01))
+    destination = tmp_path/"batch"
+    export_batch(destination, [(rc, a), (rc, b)], txt=True, plot_types=PLOT_TYPES)
+    pngs = list((destination/"plots").glob("*.png"))
+    assert len(pngs) == 12 and all(p.stat().st_size > 2000 for p in pngs)
+    assert (destination/"plots"/"001_synthetic_DRT.png").read_bytes() != (destination/"plots"/"002_synthetic_DRT.png").read_bytes()
+    assert {p.suffix for p in destination.rglob("*") if p.is_file()} == {".xlsx", ".txt", ".png"}
+    wb = load_workbook(destination/"results.xlsx", read_only=True, data_only=True)
+    assert wb["Summary"].max_row == 3
+    assert [c.value for c in wb["Summary"][1]][:4] == ["File", "Rs (Ohm)", "Rp total (Ohm)", "Lambda"]
+    wb.close()
+    dialog.close()

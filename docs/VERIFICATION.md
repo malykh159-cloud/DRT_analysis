@@ -1,5 +1,32 @@
 # Verification — 2026-10-15
 
+## 0.3.0 functional update
+
+- 110 tests passed, including headerless TXT separators, UTF-8/UTF-16, both
+  imaginary conventions, malformed rows, editable automatic controls and batch
+  export of all six PNG types for two distinct analysis variants.
+- All 35 supplied spectra imported, calculated and exported to XLSX/TXT;
+  source SHA-256 values were unchanged (`artifacts/real_data_validation/`).
+- Two additional real headerless 60-point DRTtools files from the import error
+  log imported, calculated and exported successfully. These private source files
+  remain outside the repository; derived checks are under ignored artifacts/.
+- Source application smoke passed at `artifacts/source_smoke_0_3/`: Manual shape
+  epsilon 6, synthetic two-RC Rp = 100.29587 Ohm, relative RMS = 0.54351%,
+  two peaks, headerless import, manual edits and two-file XLSX/TXT/PNG export.
+- Inspected the export dialog and real PNG output visually. PNG filenames
+  identify each source and plot type; Nyquist and DRT are the default selection.
+- Cross-basis numerical regression tests explicitly use Auto shape to match
+  basis width to grid spacing, as before. The new Manual-6 Gaussian default is
+  independently exercised by GUI/export tests and the executable smoke test.
+- Bayesian investigation confirmed an unimplemented engine stub, not a missing
+  dependency. No Bayesian results or uncertainty bands are represented as working.
+- Full batch export passed for all 35 spectra: XLSX, TXT, and 70 default PNG
+  plots (`artifacts/all_spectra_export_172519/`).
+- Final portable EXE passed offscreen and native Windows Qt smoke checks with
+  PATH restricted to Windows and Python environment variables removed. All 186
+  native dependencies passed provenance checks. Final artifacts are under
+  `artifacts/portable_final_0_3/`.
+
 ## 0.2.0 functional update
 
 - Full suite: **91 passed**. Includes inclusive frequency selection and rejection

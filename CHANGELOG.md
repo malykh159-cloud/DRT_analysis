@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — 2026-10-15
+
+- Import headerless three-column DRTtools TXT and BOM-marked UTF-16/UTF-32.
+- Batch export all/selected calculated spectra to XLSX and tab-separated TXT.
+- Select PNG plot types for all exported files; default Nyquist and DRT.
+- Compact Summary: File, Rs, Rp total, lambda and peak Rp values.
+- Manual fields remain editable; edits select their manual parameter mode.
+- Default Manual shape, epsilon 6, including Auto analysis.
+- Explain the unimplemented Bayesian engine and add Compare usage help.
+
 ## 0.2.0 — 2026-10-15
 
 - Inclusive per-spectrum manual frequency range, shared by DRT/Lin-KK/Auto/Scan

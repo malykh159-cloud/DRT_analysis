@@ -11,9 +11,8 @@ from ..state.history import History
 from ..ui.settings_panel import SettingsPanel
 from ..ui.plots import SpectrumPlots
 from ..ui.lambda_scan import LambdaScanDialog
-from ..export.tables import export_xlsx, export_csv_bundle
-from ..export.settings import export_settings
-from ..export.plots import export_plot
+from ..export.batch import export_batch
+from ..ui.export_dialog import ExportDialog
 from .workers import AnalysisWorker
 
 log = logging.getLogger(__name__)
@@ -74,10 +73,7 @@ class MainWindow(QtW.QMainWindow):
         self.compare_action = action("Compare DRT", self.compare_selected)
         toolbar.addSeparator()
         export_menu = QtW.QMenu("Export", self)
-        for text, slot in (("Results XLSX…", self.save_xlsx), ("CSV bundle + JSON…", self.save_csv),
-                           ("Current settings JSON…", self.save_json), ("Active plot PNG / SVG…", self.save_plot),
-                           ("All plots PNG + SVG…", self.save_all_plots)):
-            export_menu.addAction(text, slot)
+        export_menu.addAction("Export results and PNG plots…", self.save_results)
         export_button = QtW.QToolButton()
         export_button.setText("Export")
         export_button.setMenu(export_menu)
@@ -86,7 +82,9 @@ class MainWindow(QtW.QMainWindow):
         self.menuBar().addMenu(export_menu)
         help_menu = self.menuBar().addMenu("Help")
         help_menu.addAction("Mathematics and limitations", self.help_math)
+        help_menu.addAction("How to compare spectra", self.help_compare)
         help_menu.addAction("About", self.about)
+        self.compare_action.setToolTip("Calculate spectra, select rows with Ctrl / Shift, then Compare DRT.")
 
         splitter = QtW.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.setCentralWidget(splitter)
@@ -545,60 +543,54 @@ class MainWindow(QtW.QMainWindow):
 
     def compare_selected(self):
         pairs = self.result_pairs()
-        if not pairs:
-            self.notify_error("No results", "Select spectra with calculated DRT results.")
+        if len(pairs) < 2:
+            self.notify_error("Compare DRT", "Calculate at least two spectra. Select rows with Ctrl / Shift (or Ctrl+A), then click Compare DRT.")
             return
         self.plots.compare(pairs)
 
-    def save_xlsx(self):
-        pairs = self.result_pairs()
-        if not pairs:
-            return self.notify_error("No results", "Run analysis and select result rows first.")
-        path, _ = QtW.QFileDialog.getSaveFileName(self, "Export selected results", "DRT_results.xlsx", "Excel (*.xlsx)")
-        if path:
-            self.export_call(lambda: export_xlsx(path, pairs), path)
-
-    def export_call(self, callback, path):
+    def save_results(self):
+        if self.thread:
+            return self.notify_error("Analysis running", "Wait until analysis finishes before exporting.")
+        all_pairs = [(entry.raw, entry.history.current) for entry in self.entries if entry.history.current]
+        selected = self.result_pairs()
+        if not all_pairs:
+            return self.notify_error("No results", "Run analysis first.")
+        dialog = ExportDialog(len(all_pairs), len(selected), self)
+        if dialog.exec() != QtW.QDialog.DialogCode.Accepted:
+            return
+        pairs = all_pairs if dialog.scope.currentIndex() == 0 else selected
+        types = dialog.plot_types()
+        if not pairs or not (dialog.xlsx.isChecked() or dialog.txt.isChecked() or types):
+            return self.notify_error("Nothing to export", "Choose calculated spectra and at least one table format or plot type.")
+        parent = QtW.QFileDialog.getExistingDirectory(self, "Choose parent directory for export")
+        if not parent:
+            return
+        path = Path(parent)/datetime.now().strftime("DRT_export_%Y%m%d_%H%M%S_%f")
+        progress = QtW.QProgressDialog("Exporting results and PNG plots…", "", 0, len(pairs), self)
+        progress.setCancelButton(None)
+        progress.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
+        progress.setMinimumDuration(0)
+        progress.show()
+        def update(done, total):
+            progress.setMaximum(total)
+            progress.setValue(done)
         try:
-            callback()
-            self.statusBar().showMessage(f"Exported: {path}")
+            export_batch(path, pairs, xlsx=dialog.xlsx.isChecked(), txt=dialog.txt.isChecked(),
+                         plot_types=types, progress=update)
+            self.statusBar().showMessage(f"Exported {len(pairs)} spectra: {path}")
         except Exception as exc:
             log.exception("Export failed")
             self.notify_error("Export failed", str(exc))
+        finally:
+            progress.close()
 
-    def save_csv(self):
-        pairs = self.result_pairs()
-        if not pairs:
-            return self.notify_error("No results", "Run analysis and select result rows first.")
-        parent = QtW.QFileDialog.getExistingDirectory(self, "Choose parent directory for a new CSV bundle")
-        if parent:
-            path = Path(parent)/datetime.now().strftime("DRT_export_%Y%m%d_%H%M%S_%f")
-            self.export_call(lambda: export_csv_bundle(path, pairs), path)
-
-    def save_json(self):
-        if not self.current or not self.current.history.current:
-            return self.notify_error("No result", "Run analysis for the selected spectrum first.")
-        path, _ = QtW.QFileDialog.getSaveFileName(self, "Export analysis settings", "DRT_settings.json", "JSON (*.json)")
-        if path:
-            self.export_call(lambda: export_settings(path, self.current.raw, self.current.history.current), path)
-
-    def save_plot(self):
-        path, selected = QtW.QFileDialog.getSaveFileName(self, "Export active plot", "DRT_plot.png", "PNG (*.png);;SVG (*.svg)")
-        if path:
-            if not Path(path).suffix:
-                path += ".svg" if "SVG" in selected else ".png"
-            self.export_call(lambda: export_plot(self.plots.active_plot(), path), path)
-
-    def save_all_plots(self):
-        parent = QtW.QFileDialog.getExistingDirectory(self, "Choose parent directory for plot exports")
-        if parent:
-            directory = Path(parent)/datetime.now().strftime("DRT_plots_%Y%m%d_%H%M%S_%f")
-            def save():
-                directory.mkdir()
-                for name, plot in self.plots.all_plots().items():
-                    for suffix in ("png", "svg"):
-                        export_plot(plot, directory/f"{name}.{suffix}")
-            self.export_call(save, directory)
+    def help_compare(self):
+        QtW.QMessageBox.information(self, "Compare DRT",
+            "1. Import two or more spectra and calculate them (Auto All or Run analysis).\n"
+            "2. Select their rows in SPECTRA with Ctrl / Shift. Ctrl+A selects all rows.\n"
+            "3. Click Compare DRT. Comparison overlays their current DRT variants.\n"
+            "4. Use the DRT axis selector for tau or frequency. Click legend entries to hide/show curves.\n\n"
+            "Uncalculated spectra are skipped. Comparison uses each file's current history variant.")
 
     def about(self):
         QtW.QMessageBox.about(self, "About DRT Analyzer", f"DRT Analyzer {__version__}\n\n"

@@ -7,7 +7,7 @@ from openpyxl import load_workbook
 from drt_analyzer.analysis.pipeline import analyze
 from drt_analyzer.drt.base import AnalysisSettings
 from drt_analyzer.state.history import History
-from drt_analyzer.export.tables import export_xlsx, export_csv_bundle, summary_rows, safe_cell
+from drt_analyzer.export.tables import export_xlsx, export_txt_bundle, summary_rows, safe_cell
 from drt_analyzer.export.settings import export_settings
 
 
@@ -47,7 +47,7 @@ def test_remove_history_invalid_selection():
 def test_exports(tmp_path, rc):
     v = analyze(rc, AnalysisSettings(lambda_method="Manual", lambda_value=1e-6))
     export_xlsx(tmp_path/"result.xlsx", [(rc, v)])
-    export_csv_bundle(tmp_path/"csv", [(rc, v)])
+    export_txt_bundle(tmp_path/"txt", [(rc, v)])
     export_settings(tmp_path/"settings.json", rc, v)
     m = json.loads((tmp_path/"settings.json").read_text(encoding="utf-8"))
     assert m["source_sha256"] == rc.source_hash
@@ -56,12 +56,12 @@ def test_exports(tmp_path, rc):
     assert m["preprocessing"]["points_used"] == len(rc.frequency)
     assert m["import"]["im_multiplier"] == 1
     wb = load_workbook(tmp_path/"result.xlsx", read_only=True, data_only=True)
-    assert wb["Summary"].cell(2, 2).value == v.rp_total
+    assert wb["Summary"].cell(2, 3).value == v.rp_total
     assert wb["1 DRT"].max_row == len(v.tau)+1
     assert wb["1 Raw source"].cell(2, 4).value == pytest.approx(rc.imaginary_original[0], rel=1e-14)
     assert wb["1 Impedance"].max_row == len(rc.frequency)+1
     wb.close()
-    assert len(list((tmp_path/"csv").glob("*.csv"))) == 6
+    assert len(list((tmp_path/"txt").glob("*.txt"))) == 7
     assert safe_cell("=1+1") == "'=1+1"
 
 
