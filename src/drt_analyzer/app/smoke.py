@@ -1,9 +1,10 @@
 """Executable-level smoke verification: synthetic numerical truth + real Qt export."""
 from dataclasses import replace
 import json
+import sys
 from pathlib import Path
 import numpy as np
-from PySide6 import QtWidgets as QtW
+from PySide6 import QtCore, QtWidgets as QtW
 from ..data.models import RawSpectrum, ImportInfo
 from ..drt.base import AnalysisSettings
 from ..analysis.pipeline import analyze
@@ -11,6 +12,7 @@ from ..export.tables import export_xlsx, export_csv_bundle
 from ..export.settings import export_settings
 from ..export.plots import export_plot
 from .main_window import Entry
+from .. import __version__
 
 
 def run_smoke(window, output):
@@ -47,8 +49,43 @@ def run_smoke(window, output):
     export_xlsx(output/"results.xlsx", [(raw, v)])
     export_csv_bundle(output/"csv", [(raw, v)])
     export_settings(output/"settings.json", raw, v)
-    result = {"passed": True, "rp_total": v.rp_total, "peaks": len(v.peaks),
+    # Exercise the six 0.2.0 user-facing additions in the frozen executable too.
+    ranged = analyze(raw, replace(settings, frequency_min_hz=float(f[-8]), frequency_max_hz=float(f[5])))
+    window.result_ready(0, ranged)
+    assert len(ranged.frequency) < len(raw.frequency)
+    assert window.calculate_action.text() == "Run analysis"
+    window.plots.tabs.setCurrentIndex(2)
+    QtW.QApplication.processEvents()
+    hover = window.plots.hovers[window.plots.drt]
+    scene = window.plots.drt.plotItem.vb.mapViewToScene(QtCore.QPointF(np.log10(.01), max(ranged.gamma)/2))
+    hover.mouse_moved(scene)
+    assert np.isclose(hover.cursor_frequency, 1/(2*np.pi*.01))
+    window.grab().save(str(output/"workspace_range.png"))
+    window.plots.tabs.setCurrentIndex(0)
+    QtW.QApplication.processEvents()
+    scene = window.plots.nyquist.plotItem.vb.mapViewToScene(QtCore.QPointF(raw.real[0], -raw.impedance[0].imag))
+    window.plots.hovers[window.plots.nyquist].mouse_moved(scene)
+    assert window.plots.hovers[window.plots.nyquist].cursor_frequency == raw.frequency[0]
+    window.grab().save(str(output/"nyquist_hover.png"))
+    button = window.settings.findChild(QtW.QToolButton, "help_lambda_value")
+    button.click()
+    QtW.QApplication.processEvents()
+    button.help_dialog.grab().save(str(output/"help_lambda.png"))
+    button.help_dialog.close()
+    export_settings(output/"range_settings.json", raw, ranged)
+    export_xlsx(output/"range_results.xlsx", [(raw, ranged)])
+    from ..data.column_detection import imaginary_sign
+    assert imaginary_sign("Im", np.array([1, 2, -1]))[0] == -1
+    assert imaginary_sign("-Im", np.array([-1, -2, 1]))[0] == 1
+    window.remove_selected_history()
+    assert window.current.history.current is v
+    window.remove_selected_spectra()
+    assert window.current is None and not window.entries
+    result = {"passed": True, "software_version": __version__, "frozen": bool(getattr(sys, "frozen", False)),
+              "python_executable": sys.executable, "rp_total": v.rp_total, "peaks": len(v.peaks),
               "relative_rms": v.quality["relative_rms"], "kk_status": v.kk.status,
               "lambda": v.lambda_value, "shape": v.shape_value,
-              "undo_redo": "passed", "plots": 14}
+              "undo_redo": "passed", "plots": 14, "frequency_range_points_used": len(ranged.frequency),
+              "sign_majority": "passed", "delete_history": "passed", "delete_spectra": "passed",
+              "parameter_help": "passed", "frequency_hover": "passed"}
     (output/"smoke_result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")

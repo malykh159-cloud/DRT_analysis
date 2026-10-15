@@ -30,3 +30,22 @@ class History:
             raise IndexError("Invalid history position.")
         self.position = position
         return self.current
+
+    def remove(self, positions):
+        """Remove only in-memory snapshots; retain current or nearest predecessor."""
+        removed = set(positions)
+        if any(i < 0 or i >= len(self.variants) for i in removed):
+            raise IndexError("Invalid history position.")
+        if not removed:
+            return self.current
+        old_position = self.position
+        survivors = [(i, variant) for i, variant in enumerate(self.variants) if i not in removed]
+        self.variants = [variant for _, variant in survivors]
+        if not survivors:
+            self.position = -1
+        elif old_position not in removed:
+            self.position = next(i for i, (old, _) in enumerate(survivors) if old == old_position)
+        else:
+            predecessors = [i for i, (old, _) in enumerate(survivors) if old < old_position]
+            self.position = predecessors[-1] if predecessors else 0
+        return self.current

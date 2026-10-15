@@ -1,6 +1,8 @@
 import numpy as np
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets as QtW
+from .plot_hover import FrequencyHover
+from .parameter_help import help_button
 
 COLORS = ["#196e9b", "#c75b30", "#288365", "#8a5da8", "#bd8b24", "#487a89", "#a14765", "#6d7a31"]
 pg.setConfigOptions(background="w", foreground="#293743", antialias=True)
@@ -36,8 +38,14 @@ class SpectrumPlots(QtW.QWidget):
         self.axis = QtW.QComboBox()
         self.axis.addItems(["τ (s)", "Frequency (Hz)"])
         axisbar.addWidget(self.axis)
+        axisbar.addWidget(help_button("drt_axis", self))
         axisbar.addStretch()
         layout.addLayout(axisbar)
+        self.cursor_readout = QtW.QLabel("Наведите курсор на график: частота и ближайшая точка появятся здесь.")
+        self.cursor_readout.setWordWrap(True)
+        self.cursor_readout.setMinimumHeight(34)
+        self.cursor_readout.setStyleSheet("color: #225e79; padding: 2px 5px;")
+        layout.addWidget(self.cursor_readout)
         self.tabs = QtW.QTabWidget()
         layout.addWidget(self.tabs)
         self.nyquist = plot("Nyquist", "Re(Z)", "−Im(Z)", "Ω", "Ω")
@@ -64,6 +72,15 @@ class SpectrumPlots(QtW.QWidget):
         self.tabs.addTab(self.comparison, "Compare DRT")
         self.axis.currentIndexChanged.connect(self._axis_changed)
         self._pairs = []
+        self.hovers = {
+            self.nyquist: FrequencyHover(self.nyquist, self.cursor_readout, "nyquist"),
+            self.magnitude: FrequencyHover(self.magnitude, self.cursor_readout, log_y=True, value_label="|Z| (Ω)"),
+            self.phase: FrequencyHover(self.phase, self.cursor_readout, value_label="Phase (°)"),
+            self.drt: FrequencyHover(self.drt, self.cursor_readout, "tau", value_label="γ (Ω)"),
+            self.residual: FrequencyHover(self.residual, self.cursor_readout, value_label="Residual (%)"),
+            self.kk_residual: FrequencyHover(self.kk_residual, self.cursor_readout, value_label="KK residual (%)"),
+            self.comparison: FrequencyHover(self.comparison, self.cursor_readout, "tau", value_label="γ (Ω)"),
+        }
 
     def _axis_changed(self):
         self.show_spectrum(self.raw, self.variant)
@@ -71,6 +88,7 @@ class SpectrumPlots(QtW.QWidget):
 
     def clear_plot(self, widget):
         widget.clear()
+        self.hovers[widget].clear()
         if widget.plotItem.legend:
             widget.plotItem.legend.clear()
 
@@ -81,25 +99,43 @@ class SpectrumPlots(QtW.QWidget):
         if raw is None:
             return
         f, z = raw.frequency, raw.impedance
-        line(self.nyquist, z.real, -z.imag, "Experimental", COLORS[0], "o")
-        line(self.magnitude, f, np.abs(z), "Experimental", COLORS[0], "o")
-        line(self.phase, f, np.angle(z, deg=True), "Experimental", COLORS[0], "o")
+        nyquist = line(self.nyquist, z.real, -z.imag, "Experimental", COLORS[0], "o")
+        details = np.full(len(f), "Experimental", dtype=object)
+        excluded = np.asarray(variant.preprocessing["excluded_indices"], dtype=int) if variant else np.array([], dtype=int)
+        if len(excluded):
+            details[excluded] = "Outside analysis range"
+        self.hovers[self.nyquist].add_curve(nyquist, z.real, -z.imag, f, "Experimental", details)
+        magnitude = line(self.magnitude, f, np.abs(z), "Experimental", COLORS[0], "o")
+        phase = line(self.phase, f, np.angle(z, deg=True), "Experimental", COLORS[0], "o")
+        self.hovers[self.magnitude].add_curve(magnitude, f, np.abs(z), f, "Experimental")
+        self.hovers[self.phase].add_curve(phase, f, np.angle(z, deg=True), f, "Experimental")
+        if len(excluded):
+            line(self.nyquist, z.real[excluded], -z.imag[excluded], "Outside analysis range", "#aeb8bf", "o")
+            line(self.magnitude, f[excluded], np.abs(z[excluded]), "Outside analysis range", "#aeb8bf", "o")
+            line(self.phase, f[excluded], np.angle(z[excluded], deg=True), "Outside analysis range", "#aeb8bf", "o")
         if variant is None:
             return
         v = variant
         line(self.nyquist, v.reconstructed.real, -v.reconstructed.imag, "DRT reconstruction", COLORS[1])
-        line(self.magnitude, v.frequency, np.abs(v.reconstructed), "DRT reconstruction", COLORS[1])
-        line(self.phase, v.frequency, np.angle(v.reconstructed, deg=True), "DRT reconstruction", COLORS[1])
-        line(self.residual, v.frequency, 100*v.residuals.real, "Re", COLORS[0])
-        line(self.residual, v.frequency, 100*v.residuals.imag, "Im", COLORS[1])
+        for widget, values, name, color in (
+                (self.magnitude, np.abs(v.reconstructed), "DRT reconstruction", COLORS[1]),
+                (self.phase, np.angle(v.reconstructed, deg=True), "DRT reconstruction", COLORS[1]),
+                (self.residual, 100*v.residuals.real, "Re", COLORS[0]),
+                (self.residual, 100*v.residuals.imag, "Im", COLORS[1])):
+            curve = line(widget, v.frequency, values, name, color)
+            self.hovers[widget].add_curve(curve, v.frequency, values, v.frequency, name)
         if v.kk:
             line(self.nyquist, v.kk.reconstructed.real, -v.kk.reconstructed.imag, "Lin-KK", COLORS[2], dashed=True)
-            line(self.kk_residual, v.frequency, 100*v.kk.residuals.real, "Re", COLORS[0])
-            line(self.kk_residual, v.frequency, 100*v.kk.residuals.imag, "Im", COLORS[1])
+            for values, name, color in ((100*v.kk.residuals.real, "Re", COLORS[0]),
+                                         (100*v.kk.residuals.imag, "Im", COLORS[1])):
+                curve = line(self.kk_residual, v.frequency, values, name, color)
+                self.hovers[self.kk_residual].add_curve(curve, v.frequency, values, v.frequency, name)
         is_frequency = self.axis.currentIndex() == 1
         x = 1/(2*np.pi*v.tau) if is_frequency else v.tau
+        self.hovers[self.drt].mode = "frequency" if is_frequency else "tau"
         self.drt.setLabel("bottom", "Frequency" if is_frequency else "τ", units="Hz" if is_frequency else "s")
-        line(self.drt, x, v.gamma, f"DRT · λ={v.lambda_value:.3g}", COLORS[0])
+        curve = line(self.drt, x, v.gamma, f"DRT · λ={v.lambda_value:.3g}", COLORS[0])
+        self.hovers[self.drt].add_curve(curve, x, v.gamma, 1/(2*np.pi*v.tau), raw.name)
         if v.peaks:
             scatter = pg.ScatterPlotItem(
                 # ScatterPlotItem has no setLogMode: supply view coordinates.
@@ -118,10 +154,12 @@ class SpectrumPlots(QtW.QWidget):
         self._pairs = list(pairs)
         self.clear_plot(self.comparison)
         is_frequency = self.axis.currentIndex() == 1
+        self.hovers[self.comparison].mode = "frequency" if is_frequency else "tau"
         self.comparison.setLabel("bottom", "Frequency" if is_frequency else "τ", units="Hz" if is_frequency else "s")
         for i, (raw, v) in enumerate(self._pairs):
             x = 1/(2*np.pi*v.tau) if is_frequency else v.tau
-            line(self.comparison, x, v.gamma, raw.name, COLORS[i % len(COLORS)])
+            curve = line(self.comparison, x, v.gamma, raw.name, COLORS[i % len(COLORS)])
+            self.hovers[self.comparison].add_curve(curve, x, v.gamma, 1/(2*np.pi*v.tau), raw.name)
         self.comparison.enableAutoRange()
         if switch:
             self.tabs.setCurrentIndex(4)

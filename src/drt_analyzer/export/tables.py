@@ -22,7 +22,9 @@ def summary_rows(pairs):
     max_peaks = max((len(v.peaks) for _, v in pairs), default=0)
     header = ["File", "Rp total (Ohm)", "Peak count", "DRT method", "Lambda method", "Lambda",
               "RBF", "Shape epsilon (1/ln tau)", "Derivative order", "Relative RMS",
-              "RMS Re (Ohm)", "RMS Im (Ohm)", "Lin-KK status", "Rs (Ohm)", "L (H)", "Warnings"]
+              "RMS Re (Ohm)", "RMS Im (Ohm)", "Lin-KK status", "Rs (Ohm)", "L (H)", "Warnings",
+              "Used f min (Hz)", "Used f max (Hz)", "Source points", "Used points",
+              "Requested f min (Hz)", "Requested f max (Hz)"]
     for i in range(1, max_peaks+1):
         header.extend([f"Peak {i} tau (s)", f"Peak {i} f (Hz)", f"Peak {i} Rp (Ohm)", f"Peak {i} edge"])
     rows = [header]
@@ -30,7 +32,9 @@ def summary_rows(pairs):
         row = [raw.name, v.rp_total, len(v.peaks), v.settings.method, v.settings.lambda_method,
                v.lambda_value, v.settings.rbf, v.shape_value, v.settings.derivative_order,
                v.quality["relative_rms"], v.quality["rms_real_ohm"], v.quality["rms_imag_ohm"],
-               v.kk.status if v.kk else "Not run", v.rs_ohm, v.inductance_h, " | ".join(v.warnings)]
+               v.kk.status if v.kk else "Not run", v.rs_ohm, v.inductance_h, " | ".join(v.warnings),
+               float(v.frequency.min()), float(v.frequency.max()), len(raw.frequency), len(v.frequency),
+               v.settings.frequency_min_hz, v.settings.frequency_max_hz]
         for peak in v.peaks:
             row.extend([peak.tau_s, peak.frequency_hz, peak.rp_ohm, peak.edge])
         rows.append(row+[""]*(len(header)-len(row)))

@@ -17,13 +17,17 @@ def main(argv=None):
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     if args.smoke_test:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from PySide6 import QtCore, QtGui, QtWidgets as QtW
-    from .main_window import MainWindow
     root = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[3]
     log_dir = root/"logs"
     log_dir.mkdir(exist_ok=True)
     handler = RotatingFileHandler(log_dir/"drt_analyzer.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8")
     logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    try:
+        from PySide6 import QtCore, QtGui, QtWidgets as QtW
+        from .main_window import MainWindow
+    except Exception:
+        logging.exception("Cannot initialize Qt or application libraries")
+        raise
     app = QtW.QApplication.instance() or QtW.QApplication(sys.argv[:1])
     # The Windows offscreen plugin does not enumerate system fonts. Load a
     # system font explicitly so automated scientific exports contain real text.

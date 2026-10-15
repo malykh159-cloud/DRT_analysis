@@ -34,11 +34,19 @@ class AnalysisSettings:
     peak_distance_decades: float = 0.15
     kfold_splits: int = 5
     random_seed: int = 34054
+    frequency_min_hz: float | None = None
+    frequency_max_hz: float | None = None
 
     def validate(self):
         import math
+        for bound in (self.frequency_min_hz, self.frequency_max_hz):
+            if bound is not None and (not math.isfinite(bound) or bound <= 0):
+                raise ValueError("Frequency bounds must be finite and strictly positive.")
+        if (self.frequency_min_hz is not None and self.frequency_max_hz is not None
+                and self.frequency_min_hz >= self.frequency_max_hz):
+            raise ValueError("Minimum frequency must be less than maximum frequency.")
         if self.method != "Tikhonov":
-            raise ValueError("Only verified Tikhonov DRT is available in 0.1.0.")
+            raise ValueError("Only verified Tikhonov DRT is currently available.")
         if self.mode not in {"Auto", "Manual"}:
             raise ValueError("Mode must be Auto or Manual.")
         if self.lambda_method not in {"Manual", "GCV", "mGCV", "rGCV", "L-curve", "k-fold"}:

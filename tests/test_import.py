@@ -2,7 +2,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from drt_analyzer.data.importers import load_spectrum
-from drt_analyzer.data.column_detection import ImportErrorDetail, SignAmbiguity
+from drt_analyzer.data.column_detection import ImportErrorDetail, imaginary_sign
 
 
 def write_data(path, header="Frequency (Hz);Re(Z);Im(Z)", sep=";", sign=-1):
@@ -29,11 +29,23 @@ def test_negative_im_header(tmp_path):
     assert b.info.im_multiplier == -1
 
 
-def test_ambiguous_positive_sign(tmp_path):
+def test_automatic_positive_sign(tmp_path):
     path = write_data(tmp_path/"test.csv", sign=1)
-    with pytest.raises(SignAmbiguity):
-        load_spectrum(path)
-    assert load_spectrum(path, im_multiplier=-1).impedance[0].imag < 0
+    raw = load_spectrum(path)
+    assert raw.impedance[0].imag < 0
+    assert raw.info.im_multiplier == -1
+    assert "majority" in raw.info.sign_evidence
+    assert load_spectrum(path, im_multiplier=1).impedance[0].imag > 0
+
+
+@pytest.mark.parametrize("header,values,expected", [
+    ("Im", [-1, -2, 3, -4], 1), ("-Im", [-1, -2, 3, -4], 1),
+    ("Im", [1, 2, -3, 4], -1), ("-Im", [1, 2, -3, 4], -1),
+    ("Im", [0, 0, -1, 2], 1), ("-Im", [0, 0, -1, 2], -1),
+    ("Im", [0, 0, 0, 1], -1), ("-Im", [0, 0, 0, 0], -1),
+])
+def test_sign_rule_and_ties(header, values, expected):
+    assert imaginary_sign(header, np.asarray(values))[0] == expected
 
 
 @pytest.mark.parametrize("bad", ["nan", "inf", "oops"])
@@ -87,9 +99,6 @@ def test_real_examples():
     files = list(Path("data_test").glob("*.txt"))
     assert len(files) == 35
     for path in files:
-        try:
-            raw = load_spectrum(path)
-        except SignAmbiguity:
-            raw = load_spectrum(path, im_multiplier=-1)  # explicitly asserted for legacy examples
+        raw = load_spectrum(path)
         assert len(raw.frequency) >= 8
         assert np.isfinite(raw.impedance).all()

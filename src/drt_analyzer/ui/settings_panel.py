@@ -2,6 +2,7 @@ from dataclasses import replace
 from PySide6 import QtCore, QtGui, QtWidgets as QtW
 from ..drt.base import AnalysisSettings
 from ..drt.rbf import RBF_NAMES
+from .parameter_help import add_parameter
 
 
 def combo(items, tooltip=""):
@@ -41,33 +42,44 @@ class SettingsPanel(QtW.QWidget):
         method = combo(["Tikhonov", "Bayesian DRT — unavailable"])
         method.model().item(1).setEnabled(False)
         method.setItemData(1, "Reserved for a validated likelihood, prior and posterior sampler.", QtCore.Qt.ItemDataRole.ToolTipRole)
-        form.addRow("DRT", method)
+        add_parameter(form, "DRT", method, "method")
         positive = QtW.QLabel("γ(τ) ≥ 0 · separate series L")
         form.addRow(positive)
+
+        form = section("FREQUENCY RANGE")
+        self.frequency_range = QtW.QCheckBox("Use manual frequency range")
+        self.frequency_min = QtW.QLineEdit("0.01")
+        self.frequency_max = QtW.QLineEdit("100000")
+        add_parameter(form, "", self.frequency_range, "frequency_range")
+        add_parameter(form, "f min (Hz)", self.frequency_min, "frequency_min")
+        add_parameter(form, "f max (Hz)", self.frequency_max, "frequency_max")
+        self.source_range = QtW.QLabel("Source range: —")
+        self.source_range.setWordWrap(True)
+        form.addRow(self.source_range)
 
         form = section("REGULARIZATION")
         self.lambda_method = combo(["Manual", "GCV", "mGCV", "rGCV", "L-curve", "k-fold"],
             "GCV: prediction score from a linear smoother. mGCV inflates effective degrees of freedom; "
             "rGCV reduces undersmoothing risk. These use an unconstrained surrogate. L-curve: constrained "
             "residual/smoothness corner. k-fold: paired complex frequency holdouts, fixed seed.")
-        form.addRow("λ method", self.lambda_method)
+        add_parameter(form, "λ method", self.lambda_method, "lambda_method")
         self.lambda_value = QtW.QLineEdit("0.001")
         self.lambda_value.setToolTip("Regularization strength in ||W(Ax−z)||² + λ||Rx||². "
             "Smaller λ permits detail and noise; larger λ penalizes structure more strongly. Enter e.g. 1e-3.")
-        form.addRow("Manual λ", self.lambda_value)
+        add_parameter(form, "Manual λ", self.lambda_value, "lambda_value")
         self.actual_lambda = QtW.QLabel("—")
         form.addRow("Actual λ", self.actual_lambda)
         self.order = combo(["0", "1", "2"], "Penalty is ∫|dⁿγ/d(ln τ)ⁿ|² d ln τ. "
                            "0 penalizes magnitude, 1 slope, 2 curvature. Rs and L are unpenalized.")
-        form.addRow("Derivative order", self.order)
+        add_parameter(form, "Derivative order", self.order, "derivative_order")
         self.scan_min = spin(-14, 7, -8, 1, 1)
         self.scan_max = spin(-13, 8, 2, 1, 1)
         self.scan_count = QtW.QSpinBox()
         self.scan_count.setRange(7, 201)
         self.scan_count.setValue(41)
-        form.addRow("Scan log₁₀ λ min", self.scan_min)
-        form.addRow("Scan log₁₀ λ max", self.scan_max)
-        form.addRow("Scan values", self.scan_count)
+        add_parameter(form, "Scan log₁₀ λ min", self.scan_min, "scan_min")
+        add_parameter(form, "Scan log₁₀ λ max", self.scan_max, "scan_max")
+        add_parameter(form, "Scan values", self.scan_count, "scan_count")
 
         form = section("RBF")
         self.rbf = combo(RBF_NAMES, "Positive radial basis functions in ln τ. "
@@ -76,9 +88,9 @@ class SettingsPanel(QtW.QWidget):
         self.shape = spin(.05, 100, 1, 6)
         self.shape.setToolTip("ε scales distance in ln τ: larger ε gives narrower basis functions. "
                              "Auto: full width at half maximum equals one center spacing.")
-        form.addRow("Basis", self.rbf)
-        form.addRow("Shape mode", self.shape_mode)
-        form.addRow("Manual ε", self.shape)
+        add_parameter(form, "Basis", self.rbf, "rbf")
+        add_parameter(form, "Shape mode", self.shape_mode, "shape_mode")
+        add_parameter(form, "Manual ε", self.shape, "shape_value")
         self.actual_shape = QtW.QLabel("—")
         self.actual_shape.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         form.addRow("Actual ε", self.actual_shape)
@@ -88,7 +100,7 @@ class SettingsPanel(QtW.QWidget):
         self.validation.setChecked(True)
         self.validation.setToolTip("Compatibility diagnostic, not proof of linearity or stationarity. "
                                   "A review result does not block DRT or remove samples.")
-        form.addRow(self.validation)
+        add_parameter(form, "", self.validation, "validation")
         self.kk_mu = spin(.01, .99, .85, 2, .05)
         self.kk_rms = spin(.01, 50, 2, 2, .25)
         self.kk_max = QtW.QSpinBox()
@@ -99,45 +111,72 @@ class SettingsPanel(QtW.QWidget):
                                    "per measured frequency decade. Heuristic; standard μ alone can stop too early for narrow RC peaks.")
         self.kk_cap = QtW.QCheckBox("Include series capacitance in KK")
         self.kk_cap.setChecked(True)
-        form.addRow("μ cutoff", self.kk_mu)
-        form.addRow("RMS review (%)", self.kk_rms)
-        form.addRow("Max RC elements", self.kk_max)
-        form.addRow("Min RC / decade", self.kk_density)
-        form.addRow(self.kk_cap)
+        add_parameter(form, "μ cutoff", self.kk_mu, "kk_mu")
+        add_parameter(form, "RMS review (%)", self.kk_rms, "kk_rms")
+        add_parameter(form, "Max RC elements", self.kk_max, "kk_max")
+        add_parameter(form, "Min RC / decade", self.kk_density, "kk_density")
+        add_parameter(form, "", self.kk_cap, "kk_cap")
 
         form = section("PEAKS")
         self.prominence = spin(.1, 99, 3, 2, .5)
         self.prominence.setToolTip("Minimum prominence as % of maximum γ. "
                                    "Peak areas partition the entire measured-window DRT at local valleys.")
         self.distance = spin(0, 2, .15, 2, .05)
-        form.addRow("Prominence (%)", self.prominence)
-        form.addRow("Min distance (dec)", self.distance)
+        add_parameter(form, "Prominence (%)", self.prominence, "peak_prominence")
+        add_parameter(form, "Min distance (dec)", self.distance, "peak_distance")
         layout.addStretch()
         self.lambda_method.currentTextChanged.connect(self._availability)
         self.shape_mode.currentTextChanged.connect(self._availability)
+        self.frequency_range.toggled.connect(self._availability)
         self.load(self._base)
 
     def _availability(self, *_):
         self.lambda_value.setEnabled(self.lambda_method.currentText() == "Manual")
         self.shape.setEnabled(self.shape_mode.currentText() == "Manual")
+        self.frequency_min.setEnabled(self.frequency_range.isChecked())
+        self.frequency_max.setEnabled(self.frequency_range.isChecked())
+
+    def set_source_range(self, raw):
+        if raw is None:
+            self.source_range.setText("Source range: —")
+            return
+        lower, upper = float(raw.frequency.min()), float(raw.frequency.max())
+        self.source_range.setText(f"Source: {lower:.7g} … {upper:.7g} Hz · {len(raw.frequency)} points")
+        if self._base.frequency_min_hz is None:
+            self.frequency_min.setText(repr(lower))
+        if self._base.frequency_max_hz is None:
+            self.frequency_max.setText(repr(upper))
 
     def value(self):
         try:
-            lam = float(self.lambda_value.text())
+            lam = float(self.lambda_value.text().replace(",", "."))
         except ValueError as exc:
             raise ValueError("Manual λ must be a number, e.g. 1e-3.") from exc
+        lower = upper = None
+        if self.frequency_range.isChecked():
+            try:
+                lower = float(self.frequency_min.text().replace(",", "."))
+                upper = float(self.frequency_max.text().replace(",", "."))
+            except ValueError as exc:
+                raise ValueError("Frequency bounds must be numbers in Hz, e.g. 0.1 and 1e5.") from exc
         settings = replace(self._base, mode="Manual", lambda_method=self.lambda_method.currentText(), lambda_value=lam,
             lambda_min_exp=self.scan_min.value(), lambda_max_exp=self.scan_max.value(), lambda_count=self.scan_count.value(),
             rbf=self.rbf.currentText(), shape_mode=self.shape_mode.currentText(), shape_value=self.shape.value(),
             derivative_order=int(self.order.currentText()), validation=self.validation.isChecked(),
             kk_mu=self.kk_mu.value(), kk_max_elements=self.kk_max.value(), kk_min_per_decade=self.kk_density.value(),
             kk_tolerance=self.kk_rms.value()/100, kk_add_capacitance=self.kk_cap.isChecked(),
-            peak_prominence=self.prominence.value()/100, peak_distance_decades=self.distance.value())
+            peak_prominence=self.prominence.value()/100, peak_distance_decades=self.distance.value(),
+            frequency_min_hz=lower, frequency_max_hz=upper)
         settings.validate()
         return settings
 
     def load(self, settings, actual=None):
         self._base = settings
+        self.frequency_range.setChecked(settings.frequency_min_hz is not None or settings.frequency_max_hz is not None)
+        if settings.frequency_min_hz is not None:
+            self.frequency_min.setText(repr(settings.frequency_min_hz))
+        if settings.frequency_max_hz is not None:
+            self.frequency_max.setText(repr(settings.frequency_max_hz))
         self.mode.setText(f"{settings.mode.upper()} result → editable Manual" if actual else "MANUAL · editable settings")
         self.lambda_method.setCurrentText(settings.lambda_method)
         self.lambda_value.setText(f"{settings.lambda_value:.10g}")

@@ -1,7 +1,6 @@
-"""Analyze supplied examples explicitly assuming legacy positive Im is -Im.
+"""Analyze supplied predominantly capacitive spectra using sign-majority import.
 
-This assumption is recorded. The GUI asks the researcher to confirm it. This is
-an integration/robustness check, not ground-truth validation of physical spectra.
+Integration/robustness check, not ground-truth validation of physical spectra.
 """
 import os
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -13,7 +12,6 @@ import hashlib
 import json
 import time
 from drt_analyzer.data.importers import load_spectrum
-from drt_analyzer.data.column_detection import SignAmbiguity
 from drt_analyzer.analysis.pipeline import analyze, auto_settings
 from drt_analyzer.export.tables import export_xlsx, export_csv_bundle
 
@@ -28,10 +26,7 @@ def main():
     for index, path in enumerate(files, 1):
         start = time.perf_counter()
         try:
-            try:
-                raw = load_spectrum(path)
-            except SignAmbiguity:
-                raw = load_spectrum(path, im_multiplier=-1)
+            raw = load_spectrum(path)
             variant = analyze(raw, auto_settings())
             pairs.append((raw, variant))
             row = {"file": path.name, "points": len(raw.frequency), "rp_ohm": variant.rp_total,
@@ -45,7 +40,7 @@ def main():
         print(f"{index}/{len(files)} {path.name}: {row.get('error', 'calculated')}", flush=True)
     unchanged = all(hashlib.sha256(Path(p).read_bytes()).hexdigest() == digest for p, digest in before.items())
     report = {"source_count": len(files), "success_count": len(pairs), "source_hashes_unchanged": unchanged,
-              "sign_assumption": "Ambiguous legacy positive Im explicitly treated as -Im, never inferred from a physical fit.",
+              "sign_assumption": "Predominantly capacitive spectra: negative nonzero-sign majority = Im; positive majority = -Im; ties use header.",
               "results": records}
     (output/"report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     export_xlsx(output/"real_data_results.xlsx", pairs)

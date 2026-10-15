@@ -13,16 +13,17 @@ from .peaks import detect_peaks
 from .rp import integrate_rp
 
 
-def auto_settings():
+def auto_settings(frequency_min_hz=None, frequency_max_hz=None):
     from ..drt.base import AnalysisSettings
     return AnalysisSettings(mode="Auto", lambda_method="rGCV", derivative_order=2,
-                            rbf="Gaussian", shape_mode="Auto", validation=True)
+                            rbf="Gaussian", shape_mode="Auto", validation=True,
+                            frequency_min_hz=frequency_min_hz, frequency_max_hz=frequency_max_hz)
 
 
 def analyze(raw, settings, cancel=None):
     settings.validate()
     check_cancel(cancel)
-    f, z, preprocessing = prepare(raw)
+    f, z, preprocessing = prepare(raw, settings)
     induction = detect_inductance(f, z)
     preprocessing["inductance"] = induction
     kk = lin_kk(f, z, settings, cancel) if settings.validation else None
@@ -40,6 +41,9 @@ def analyze(raw, settings, cancel=None):
     rp = integrate_rp(matrices.ln_tau, gamma)
     peaks, peak_warnings = detect_peaks(matrices.tau, gamma, settings)
     warnings = list(raw.warnings)+induction["warnings"]+list(selection.warnings)+list(peak_warnings)
+    if preprocessing["excluded_indices"]:
+        warnings.append(f"User frequency range: {f.min():.7g}–{f.max():.7g} Hz; "
+                        f"{len(f)}/{len(raw.frequency)} source points used. Rp depends on this selected window.")
     if kk:
         warnings.extend(kk.warnings)
     if quality["relative_rms"] > 0.02:

@@ -1,9 +1,48 @@
 # Verification — 2026-10-15
 
+## 0.2.0 functional update
+
+- Full suite: **91 passed**. Includes inclusive frequency selection and rejection
+  of invalid/too-small windows; selected-grid KK/tau/exports; sign-majority and
+  ties; per-file Auto ranges; Del in list/history vs text editors; modeless help;
+  correct Nyquist and both DRT-axis cursor frequencies; hidden comparison curves.
+- Source executable smoke passed with all 0.2.0 features: 69/81 points selected,
+  history/spectrum removal, parameter-help dialog and frequency readouts.
+- Source images, range exports and JSON: `artifacts/source_smoke_0_2/`.
+- Sign assumption: each full source is predominantly capacitive. A positive
+  nonzero majority denotes -Im; a negative majority denotes Im. No sign dialog.
+- Removing session entries/variants never removes original measurement files.
+- All 35 real spectra were revalidated under automatic sign-majority import;
+  source hashes remained unchanged. A 1–10000 Hz window was checked on NOVA
+  (21/41 points), ERIS 850C (41/60), and DD hole 12 (42/50), including KK and
+  preservation of complete sources. See `artifacts/range_integration/report.json`.
+- Fixed the QtCore startup failure: an unrelated Poppler `icuuc.dll` with
+  versioned `_78` symbols was collected through the build host PATH, while Qt
+  imports the unversioned Windows ICU API. The Qt6Core binary itself matched
+  the installed package. Clean dependency discovery now uses Python/venv/OS
+  paths only. The bundle source check verified 186 native dependencies.
+- The corrected EXE passed its full smoke check (exit 0), including all six new
+  features, scientific reconstruction and PNG/SVG/XLSX/CSV/JSON exports.
+- Packaging regression tests reject DLLs from unrelated directories, including
+  roots with deceptively similar path prefixes. Early Qt imports are logged;
+  smoke output is isolated per build and stdout/stderr are captured.
+- Final build workflow completed successfully: **91 passed**, 186 native
+  dependencies verified, frozen EXE smoke exit 0. Build evidence:
+  `artifacts/portable_smoke_DRTAnalyzer_20261015_165356_352/`.
+- Native Windows Qt platform was also checked with Python environment variables
+  cleared and PATH restricted to Windows directories. Exit 0; the process
+  loaded Python and QtCore from `_internal` and `icuuc.dll` from Windows System32.
+  Evidence and screenshots: `artifacts/portable_windows_0_2/`.
+- Final 0.2.0 executable SHA-256:
+  `4CCF3BFF08A01E2AD9961EE358F1C94BA64F29B3ABB2821A5B6898915D6A71F4`.
+
+The results below document the original 0.1.0 baseline. Its executable hash,
+directory size and sign-confirmation workflow are historical, not the 0.2.0 build.
+
 Environment: Windows 11 x64; Python 3.14.8; NumPy 2.5.4; SciPy 1.18.1;
 PySide6 6.12.0; pyqtgraph 0.14.0; openpyxl 3.1.5; PyInstaller 6.22.3.
 
-## Completed checks
+## 0.1.0 baseline checks
 
 - `python -m pytest -q`: **64 passed**, 5.36 seconds in the final build run.
 - Scientific checks: one/two RC systems, known tau and Rp, positive gamma,

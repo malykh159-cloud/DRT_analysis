@@ -6,7 +6,6 @@ from PySide6 import QtCore, QtGui, QtWidgets as QtW
 from .. import __version__
 from ..analysis.pipeline import auto_settings
 from ..data.importers import load_spectrum
-from ..data.column_detection import SignAmbiguity
 from ..drt.base import AnalysisSettings
 from ..state.history import History
 from ..ui.settings_panel import SettingsPanel
@@ -61,7 +60,7 @@ class MainWindow(QtW.QMainWindow):
             return item
 
         self.import_action = action("Import EIS…", self.import_files, "Ctrl+O")
-        self.calculate_action = action("Calculate", self.calculate, "F5")
+        self.calculate_action = action("Run analysis", self.calculate, "F5")
         self.auto_action = action("Auto Analyze Selected", self.auto_selected)
         self.auto_all_action = action("Auto All", self.auto_all)
         self.cancel_action = action("Cancel", self.cancel)
@@ -97,7 +96,7 @@ class MainWindow(QtW.QMainWindow):
         heading = QtW.QLabel("SPECTRA")
         heading.setStyleSheet("font-weight: 600;")
         ll.addWidget(heading)
-        hint = QtW.QLabel("Ctrl / Shift: select several · drop files here")
+        hint = QtW.QLabel("Ctrl / Shift: select several · Del: remove")
         hint.setStyleSheet("color: #586974;")
         ll.addWidget(hint)
         self.table = QtW.QTableWidget(0, 9)
@@ -109,13 +108,28 @@ class MainWindow(QtW.QMainWindow):
         self.table.verticalHeader().setVisible(False)
         self.table.currentCellChanged.connect(self.selection_changed)
         ll.addWidget(self.table, 1)
+        self.remove_files_button = QtW.QPushButton("Remove selected spectra (Del)")
+        self.remove_files_button.setToolTip("Remove from this session only. Original files remain on disk.")
+        self.remove_files_button.clicked.connect(self.remove_selected_spectra)
+        ll.addWidget(self.remove_files_button)
         history_label = QtW.QLabel("ANALYSIS HISTORY")
         history_label.setStyleSheet("font-weight: 600;")
         ll.addWidget(history_label)
         self.history_list = QtW.QListWidget()
+        self.history_list.setSelectionMode(QtW.QAbstractItemView.SelectionMode.ExtendedSelection)
         self.history_list.setMaximumHeight(150)
         self.history_list.currentRowChanged.connect(self.history_selected)
         ll.addWidget(self.history_list)
+        self.remove_history_button = QtW.QPushButton("Remove selected variants (Del)")
+        self.remove_history_button.clicked.connect(self.remove_selected_history)
+        ll.addWidget(self.remove_history_button)
+        self._delete_shortcuts = []
+        for widget, callback in ((self.table, self.remove_selected_spectra),
+                                 (self.history_list, self.remove_selected_history)):
+            shortcut = QtGui.QShortcut(QtGui.QKeySequence("Delete"), widget)
+            shortcut.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(callback)
+            self._delete_shortcuts.append(shortcut)
         splitter.addWidget(left)
 
         center = QtW.QSplitter(QtCore.Qt.Orientation.Vertical)
@@ -143,9 +157,9 @@ class MainWindow(QtW.QMainWindow):
         scroll = QtW.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.settings)
-        scroll.setMinimumWidth(280)
+        scroll.setMinimumWidth(320)
         splitter.addWidget(scroll)
-        splitter.setSizes([390, 810, 300])
+        splitter.setSizes([360, 840, 350])
         splitter.setStretchFactor(1, 1)
         self.progress = QtW.QProgressBar()
         self.progress.setMaximumWidth(280)
@@ -173,29 +187,9 @@ class MainWindow(QtW.QMainWindow):
         if self.thread:
             return
         failures = []
-        ambiguous_choice = None
         for path in paths:
             try:
-                try:
-                    raw = load_spectrum(path)
-                except SignAmbiguity as exc:
-                    if ambiguous_choice is None:
-                        dialog = QtW.QMessageBox(self)
-                        dialog.setWindowTitle("Confirm imaginary sign convention")
-                        dialog.setText(f"{Path(path).name}\n\n{exc}")
-                        dialog.setInformativeText("The choice will apply to other ambiguous files in this import. "
-                            "Explicit -Im headers are always handled separately. No source values are changed.")
-                        negative = dialog.addButton("Column contains −Im(Z)", QtW.QMessageBox.ButtonRole.AcceptRole)
-                        positive = dialog.addButton("Column contains Im(Z)", QtW.QMessageBox.ButtonRole.AcceptRole)
-                        dialog.addButton(QtW.QMessageBox.StandardButton.Cancel)
-                        dialog.exec()
-                        if dialog.clickedButton() == negative:
-                            ambiguous_choice = -1
-                        elif dialog.clickedButton() == positive:
-                            ambiguous_choice = 1
-                        else:
-                            continue
-                    raw = load_spectrum(path, im_multiplier=ambiguous_choice)
+                raw = load_spectrum(path)
                 if any(e.raw.source_path == raw.source_path and e.raw.source_hash == raw.source_hash for e in self.entries):
                     continue
                 self.entries.append(Entry(raw))
@@ -206,7 +200,7 @@ class MainWindow(QtW.QMainWindow):
         if self.entries and self.current_index < 0:
             self.table.setCurrentCell(0, 0)
             self.table.selectRow(0)
-        self.statusBar().showMessage(f"{len(self.entries)} spectra loaded. Select a spectrum and Calculate, or run Auto.")
+        self.statusBar().showMessage(f"{len(self.entries)} spectra loaded. Select a spectrum and Run analysis, or use Auto.")
         if failures:
             self.notify_error("Some files could not be imported", "\n\n".join(failures))
 
@@ -255,14 +249,27 @@ class MainWindow(QtW.QMainWindow):
         self.current_index = row
         self.show_current(load_settings=True)
 
-    def show_current(self, load_settings=False):
+    def show_current(self, load_settings=False, refresh_history=True):
         entry = self.current
+        self.refresh_comparison()
         if not entry:
+            self.plots.show_spectrum(None)
+            self.peaks.setRowCount(0)
+            self.report.clear()
+            self.warnings.clear()
+            self.history_list.blockSignals(True)
+            self.history_list.clear()
+            self.history_list.blockSignals(False)
+            self.settings.load(AnalysisSettings())
+            self.settings.set_source_range(None)
+            self.undo_action.setEnabled(False)
+            self.redo_action.setEnabled(False)
             return
         v = entry.history.current
         self.plots.show_spectrum(entry.raw, v)
         if load_settings:
             self.settings.load(entry.draft, v)
+            self.settings.set_source_range(entry.raw)
         self.peaks.setRowCount(len(v.peaks) if v else 0)
         if v:
             for row, p in enumerate(v.peaks):
@@ -283,22 +290,24 @@ class MainWindow(QtW.QMainWindow):
                 f"Im convention: {entry.raw.info.im_convention}; {entry.raw.info.sign_evidence}\n"
                 f"HF inductive range (Hz): {induction['frequency_range_hz']}; {induction['action']}\n"
                 f"Points used: {len(v.frequency)}/{len(entry.raw.frequency)}; "
+                f"frequency range: {v.frequency.min():.7g} … {v.frequency.max():.7g} Hz; "
                 f"τ window: {v.tau[0]:.6g} … {v.tau[-1]:.6g} s\n"
                 f"Source SHA-256: {entry.raw.source_hash}\n"
-                "Auto results can be edited directly; Calculate creates a new Manual snapshot.")
+                "Auto results can be edited directly; Run analysis creates a new Manual snapshot.")
             self.warnings.setPlainText("\n\n".join(v.warnings) or "No diagnostic warnings.")
         else:
             self.report.setPlainText(f"{entry.raw.name}\n{len(entry.raw.frequency)} source points\n"
                 f"Im convention: {entry.raw.info.im_convention}\n{entry.raw.info.sign_evidence}\n"
-                f"SHA-256: {entry.raw.source_hash}\nChoose settings and Calculate, or Auto Analyze Selected.")
+                f"SHA-256: {entry.raw.source_hash}\nChoose settings and Run analysis, or Auto Analyze Selected.")
             self.warnings.setPlainText("\n".join(entry.raw.warnings))
-        self.history_list.blockSignals(True)
-        self.history_list.clear()
-        for i, previous in enumerate(entry.history.variants):
-            self.history_list.addItem(f"{i+1}. {previous.settings.mode} · {previous.settings.rbf} · "
-                                      f"λ={previous.lambda_value:.4g} · Rp={previous.rp_total:.5g} Ω")
-        self.history_list.setCurrentRow(entry.history.position)
-        self.history_list.blockSignals(False)
+        if refresh_history:
+            self.history_list.blockSignals(True)
+            self.history_list.clear()
+            for i, previous in enumerate(entry.history.variants):
+                self.history_list.addItem(f"{i+1}. {previous.settings.mode} · {previous.settings.rbf} · "
+                                          f"λ={previous.lambda_value:.4g} · Rp={previous.rp_total:.5g} Ω")
+            self.history_list.setCurrentRow(entry.history.position)
+            self.history_list.blockSignals(False)
         self.undo_action.setEnabled(not self.thread and entry.history.position > 0)
         self.redo_action.setEnabled(not self.thread and entry.history.position < len(entry.history.variants)-1)
 
@@ -320,10 +329,26 @@ class MainWindow(QtW.QMainWindow):
         indices = self.selected_indices()
         if not indices and self.current:
             indices = [self.current_index]
-        self.start_jobs([(i, self.entries[i].raw, auto_settings()) for i in indices])
+        self.start_auto(indices)
 
     def auto_all(self):
-        self.start_jobs([(i, e.raw, auto_settings()) for i, e in enumerate(self.entries)])
+        self.start_auto(range(len(self.entries)))
+
+    def start_auto(self, indices):
+        if self.thread:
+            return
+        try:
+            if self.current:
+                self.current.draft = self.settings.value()
+            jobs = []
+            for i in indices:
+                entry = self.entries[i]
+                settings = auto_settings(entry.draft.frequency_min_hz, entry.draft.frequency_max_hz)
+                settings.validate()
+                jobs.append((i, entry.raw, settings))
+            self.start_jobs(jobs)
+        except ValueError as exc:
+            self.notify_error("Invalid settings", str(exc))
 
     def scan(self):
         if not self.current or self.thread:
@@ -367,6 +392,9 @@ class MainWindow(QtW.QMainWindow):
             action.setEnabled(not busy)
         self.settings.setEnabled(not busy)
         self.cancel_action.setEnabled(busy)
+        self.remove_files_button.setEnabled(not busy)
+        self.remove_history_button.setEnabled(not busy)
+        self.history_list.setEnabled(not busy)
 
     @QtCore.Slot(int, int)
     def update_progress(self, done, total):
@@ -388,6 +416,8 @@ class MainWindow(QtW.QMainWindow):
         self.refresh_table()
         if self.current_index == index:
             self.show_current(load_settings=True)
+        else:
+            self.refresh_comparison()
 
     @QtCore.Slot(int, str)
     def item_failed(self, index, message):
@@ -459,7 +489,55 @@ class MainWindow(QtW.QMainWindow):
             self.current.draft = replace(v.settings, lambda_value=v.lambda_value)
             self.current.status = variant_status(v)
             self.refresh_table()
-            self.show_current(load_settings=True)
+            self.show_current(load_settings=True, refresh_history=False)
+
+    def refresh_comparison(self):
+        shown = {id(raw) for raw, _ in self.plots._pairs}
+        pairs = [(entry.raw, entry.history.current) for entry in self.entries
+                 if id(entry.raw) in shown and entry.history.current]
+        if shown:
+            self.plots.compare(pairs, switch=False)
+
+    def remove_selected_spectra(self):
+        if self.thread:
+            return
+        removed = set(self.selected_indices())
+        if not removed:
+            return
+        previous = self.current
+        if previous and self.current_index not in removed:
+            try:
+                previous.draft = self.settings.value()
+            except ValueError:
+                pass
+        self.entries = [entry for i, entry in enumerate(self.entries) if i not in removed]
+        self.current_index = next((i for i, entry in enumerate(self.entries) if entry is previous),
+                                  min(min(removed), len(self.entries)-1))
+        self.table.blockSignals(True)
+        self.table.clearSelection()
+        self.table.blockSignals(False)
+        self.refresh_table()
+        if self.current:
+            self.table.blockSignals(True)
+            self.table.selectRow(self.current_index)
+            self.table.blockSignals(False)
+        self.show_current(load_settings=True)
+        self.statusBar().showMessage(f"Removed {len(removed)} spectra from the session. Source files remain on disk.")
+
+    def remove_selected_history(self):
+        if not self.current or self.thread:
+            return
+        removed = [self.history_list.row(item) for item in self.history_list.selectedItems()]
+        if not removed:
+            return
+        variant = self.current.history.remove(removed)
+        self.current.error = ""
+        self.current.status = variant_status(variant) if variant else "Imported"
+        if variant:
+            self.current.draft = replace(variant.settings, lambda_value=variant.lambda_value)
+        self.refresh_table()
+        self.show_current(load_settings=True)
+        self.statusBar().showMessage(f"Removed {len(removed)} analysis variants from history.")
 
     def result_pairs(self):
         indices = self.selected_indices() or ([self.current_index] if self.current else [])
@@ -475,7 +553,7 @@ class MainWindow(QtW.QMainWindow):
     def save_xlsx(self):
         pairs = self.result_pairs()
         if not pairs:
-            return self.notify_error("No results", "Calculate DRT and select result rows first.")
+            return self.notify_error("No results", "Run analysis and select result rows first.")
         path, _ = QtW.QFileDialog.getSaveFileName(self, "Export selected results", "DRT_results.xlsx", "Excel (*.xlsx)")
         if path:
             self.export_call(lambda: export_xlsx(path, pairs), path)
@@ -491,7 +569,7 @@ class MainWindow(QtW.QMainWindow):
     def save_csv(self):
         pairs = self.result_pairs()
         if not pairs:
-            return self.notify_error("No results", "Calculate DRT and select result rows first.")
+            return self.notify_error("No results", "Run analysis and select result rows first.")
         parent = QtW.QFileDialog.getExistingDirectory(self, "Choose parent directory for a new CSV bundle")
         if parent:
             path = Path(parent)/datetime.now().strftime("DRT_export_%Y%m%d_%H%M%S_%f")
@@ -499,7 +577,7 @@ class MainWindow(QtW.QMainWindow):
 
     def save_json(self):
         if not self.current or not self.current.history.current:
-            return self.notify_error("No result", "Calculate the selected spectrum first.")
+            return self.notify_error("No result", "Run analysis for the selected spectrum first.")
         path, _ = QtW.QFileDialog.getSaveFileName(self, "Export analysis settings", "DRT_settings.json", "JSON (*.json)")
         if path:
             self.export_call(lambda: export_settings(path, self.current.raw, self.current.history.current), path)

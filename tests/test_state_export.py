@@ -26,6 +26,24 @@ def test_history(rc):
     assert h.variants == [a, c]
 
 
+def test_remove_history_preserves_current_and_neighbors():
+    a, b, c, d = [object() for _ in range(4)]
+    h = History([a, b, c, d], 2)
+    assert h.remove([0, 3]) is c
+    assert h.position == 1 and h.variants == [b, c]
+    assert h.remove([1]) is b
+    assert h.remove([0]) is None
+    assert h.position == -1 and h.undo() is None and h.redo() is None
+    h.push(d)
+    assert h.current is d
+
+
+def test_remove_history_invalid_selection():
+    h = History([object()], 0)
+    with pytest.raises(IndexError):
+        h.remove([1])
+
+
 def test_exports(tmp_path, rc):
     v = analyze(rc, AnalysisSettings(lambda_method="Manual", lambda_value=1e-6))
     export_xlsx(tmp_path/"result.xlsx", [(rc, v)])

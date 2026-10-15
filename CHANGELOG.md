@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.0 — 2026-10-15
+
+- Inclusive per-spectrum manual frequency range, shared by DRT/Lin-KK/Auto/Scan
+  and exported in settings, summary tables and preprocessing indices.
+- Run analysis replaces Calculate; original points outside the fit are gray.
+- Automatic Im convention from the nonzero-sign majority of each full source.
+- Remove selected spectra/history variants with Del or dedicated buttons;
+  source files remain intact, history/plots/comparisons stay synchronized.
+- Modeless Russian help beside every editable setting, with practical advice.
+- Frequency cursor readouts on Nyquist, DRT, comparison, Bode and residuals;
+  cursor overlays are excluded from PNG/SVG exports.
+- Fix Windows QtCore startup failure caused by Poppler ICU DLLs collected from
+  the host PATH; isolate dependency search and verify native library origins.
+- Record Qt initialization failures, separate smoke artifacts per build and
+  reliably retain child-process exit codes under Windows PowerShell.
+
 ## 0.1.0 — 2026-10-15
 
 - Modular Windows desktop workspace with validated TXT/CSV/TSV/XLSX import.

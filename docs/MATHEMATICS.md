@@ -3,11 +3,26 @@
 ## Integral equation and conventions
 
 `Z(ω) = Rs + jωL + ∫[a,b] γ(exp(u))/(1+jω exp(u)) du`, where `u = ln τ`.
-Measured `Im(Z)` is negative for a capacitive RC relaxation. An input −Im column
-is multiplied by −1 only in the analysis representation. The original column
-and source row order remain immutable. Nyquist displays `(Re Z, −Im Z)`.
+Measured `Im(Z)` is negative for a capacitive RC relaxation. Under the user's
+explicit predominantly-capacitive assumption, more positive than negative
+nonzero samples in the original imaginary column implies a −Im export; more
+negative implies Im. Zeros do not vote. A tie uses the header convention.
+The rule is applied per source before frequency filtering and supersedes the
+header when a majority exists. Counts/header/evidence are exported. This is a
+domain assumption, not a general inference for predominantly inductive data.
+The sign multiplier affects only the analysis representation; the original
+column and source row order remain immutable. Nyquist displays `(Re Z, −Im Z)`.
 
-The finite window is `a = ln(1/(2π fmax))`, `b = ln(1/(2π fmin))`. No extra
+Manual bounds select an inclusive subset of experimental frequencies. At least
+8 points must remain; invalid, nonpositive or inverted bounds fail explicitly.
+Bounds outside the experimental coverage add no new points. Lin-KK, induction,
+weights, automatic τ grid, lambda selection, reconstruction and peaks all use
+the same selected subset. Snapshots retain requested bounds, actual min/max,
+used original row indices and excluded indices. All source samples remain
+available; full source arrays are exported separately from selected fits.
+
+The finite window is `a = ln(1/(2π fmax))`, `b = ln(1/(2π fmin))` using the
+actual selected fmin/fmax (the full source if no bounds are enabled). No extra
 decades are added. Consequently the reported Rp is a measured-window estimate;
 not every real spectrum has enough bandwidth to determine full polarization.
 There are 12 centers per decade, clipped to 36–144 centers. Dense trapezoidal
@@ -151,3 +166,10 @@ integration on **the same finite window**. The latter is not a full pyDRTtools
 comparison: its unbounded basis integration has different edge behavior.
 Bayesian DRT remains unavailable until a validated prior/likelihood/sampler and
 coverage checks exist. No uncertainty bands are fabricated.
+
+Cursor readouts are display helpers. On Nyquist, nearest experimental frequency
+is chosen by Euclidean screen distance, accounting for both view scales. No
+unique frequency is inferred from an arbitrary Re/Im location. On τ plots the
+continuous coordinate is converted by `f=1/(2πτ)`, and displayed curve values
+are linearly interpolated in the logarithmic x coordinate. Hidden comparison
+curves are ignored. Cursor annotations are excluded from scientific exports.

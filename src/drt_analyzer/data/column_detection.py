@@ -7,7 +7,7 @@ class ImportErrorDetail(ValueError):
 
 
 class SignAmbiguity(ImportErrorDetail):
-    """The file cannot establish the imaginary convention without user input."""
+    """Reserved for import modes without the capacitive-majority assumption."""
 
 
 def normalized(text):
@@ -48,13 +48,13 @@ def imaginary_sign(header, values, override=None):
         if override not in (-1, 1):
             raise ValueError("im_multiplier must be +1 or -1.")
         return override, "user-confirmed"
-    s = normalized(header)
-    if s.startswith("-"):
-        return -1, "explicit negative imaginary header"
-    # Positive Im can be physical induction OR a legacy -Im export. Do not guess.
+    # User's explicit domain assumption: spectra are predominantly capacitive.
+    # Count signs of the original column BEFORE filtering any analysis window.
     import numpy as np
-    if np.count_nonzero(values > 0) > len(values) * 0.6:
-        raise SignAmbiguity("The Im column is predominantly positive. This may be genuine "
-                            "induction or an export of -Im(Z). Confirm its convention; "
-                            "a capacitive spectrum normally has Im(Z) < 0.")
-    return 1, "explicit Im header; no sign inversion"
+    positive, negative = int(np.count_nonzero(values > 0)), int(np.count_nonzero(values < 0))
+    if positive != negative:
+        multiplier = -1 if positive > negative else 1
+        return multiplier, (f"automatic nonzero-sign majority: {positive} positive, {negative} negative; "
+                            "predominantly capacitive spectra assumed; original header: " + str(header))
+    multiplier = -1 if normalized(header).startswith("-") else 1
+    return multiplier, (f"equal sign counts ({positive} positive, {negative} negative); header convention used")
