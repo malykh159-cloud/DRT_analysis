@@ -1,2 +1,4 @@
 # Preserve original scientific measurement bytes and their existing formatting.
 data_test/** -text whitespace=-blank-at-eol,-blank-at-eof
+# Keep the pinned scientific reference exactly as distributed upstream.
+tests/reference_pydrttools/** -text whitespace=-blank-at-eol,-blank-at-eof
