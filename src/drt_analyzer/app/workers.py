@@ -13,6 +13,7 @@ class AnalysisWorker(QtCore.QObject):
     failed = QtCore.Signal(int, str)
     scan_result = QtCore.Signal(int, object)
     progress = QtCore.Signal(int, int)
+    sampling_progress = QtCore.Signal(int, int, str)
     finished = QtCore.Signal(bool)
 
     def __init__(self, jobs, scan=False):
@@ -39,9 +40,13 @@ class AnalysisWorker(QtCore.QObject):
                                                lambda done, total: self.progress.emit(done, total))
                         self.scan_result.emit(index, variants)
                     else:
-                        v = analyze(raw, settings, self.cancel_event.is_set)
+                        def sampling(done, total, message):
+                            self.sampling_progress.emit(n*total+done, len(self.jobs)*total,
+                                f"Spectrum {n+1}/{len(self.jobs)} · {raw.name} · {message}")
+                        v = analyze(raw, settings, self.cancel_event.is_set, sampling)
                         self.result.emit(index, v)
-                        self.progress.emit(n+1, len(self.jobs))
+                        if settings.method != "Bayesian DRT":
+                            self.progress.emit(n+1, len(self.jobs))
                 except Cancelled:
                     cancelled = True
                     break

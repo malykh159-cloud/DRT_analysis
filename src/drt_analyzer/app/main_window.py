@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 
 def variant_status(variant):
-    return "Review" if (variant.quality["relative_rms"] > .02 or
+    return "Review" if ((variant.uncertainty is not None and not variant.uncertainty.diagnostics["convergence_ok"]) or variant.quality["relative_rms"] > .02 or
         (variant.kk and variant.kk.status != "Compatible") or any(p.edge for p in variant.peaks)) else "Ready"
 
 
@@ -163,6 +163,10 @@ class MainWindow(QtW.QMainWindow):
         self.progress.setMaximumWidth(280)
         self.progress.setValue(0)
         self.statusBar().addPermanentWidget(self.progress)
+        self.stop_button = QtW.QPushButton("Stop")
+        self.stop_button.setEnabled(False)
+        self.stop_button.clicked.connect(self.cancel)
+        self.statusBar().addPermanentWidget(self.stop_button)
         self.statusBar().showMessage("Import TXT / CSV / XLSX to begin. Original data are preserved.")
         self.refresh_table()
 
@@ -292,6 +296,15 @@ class MainWindow(QtW.QMainWindow):
                 f"τ window: {v.tau[0]:.6g} … {v.tau[-1]:.6g} s\n"
                 f"Source SHA-256: {entry.raw.source_hash}\n"
                 "Auto results can be edited directly; Run analysis creates a new Manual snapshot.")
+            if v.uncertainty is not None:
+                u = v.uncertainty
+                d = u.diagnostics
+                acceptance = ", ".join(f"{c['acceptance_rate']:.3f}" for c in d["chains"])
+                self.report.appendPlainText(f"\nBayesian posterior mean; {u.credible_interval:g}% pointwise credible interval\n"
+                    f"Weighted noise sigma = {u.noise_sigma:.7g}; acceptance / chain = {acceptance}\n"
+                    f"Rank/folded split R-hat max = {d['rhat_max']}; "
+                    f"bulk ESS min = {d['ess_bulk_min']:.1f}; tail ESS min = {d['ess_tail_min']:.1f}\n"
+                    f"Problematic transitions = {d['problematic_transitions']}; divergences N/A (exact dynamics).")
             self.warnings.setPlainText("\n\n".join(v.warnings) or "No diagnostic warnings.")
         else:
             self.report.setPlainText(f"{entry.raw.name}\n{len(entry.raw.frequency)} source points\n"
@@ -302,7 +315,8 @@ class MainWindow(QtW.QMainWindow):
             self.history_list.blockSignals(True)
             self.history_list.clear()
             for i, previous in enumerate(entry.history.variants):
-                self.history_list.addItem(f"{i+1}. {previous.settings.mode} · {previous.settings.rbf} · "
+                label = "Bayesian" if previous.settings.method == "Bayesian DRT" else previous.settings.mode
+                self.history_list.addItem(f"{i+1}. {label} · {previous.settings.rbf} · "
                                           f"λ={previous.lambda_value:.4g} · Rp={previous.rp_total:.5g} Ω")
             self.history_list.setCurrentRow(entry.history.position)
             self.history_list.blockSignals(False)
@@ -342,6 +356,8 @@ class MainWindow(QtW.QMainWindow):
             for i in indices:
                 entry = self.entries[i]
                 settings = auto_settings(entry.draft.frequency_min_hz, entry.draft.frequency_max_hz)
+                if self.current and self.settings.method.currentText() == "Bayesian DRT":
+                    settings = replace(settings, method="Bayesian DRT", bayesian=self.settings.bayesian.value())
                 settings.validate()
                 jobs.append((i, entry.raw, settings))
             self.start_jobs(jobs)
@@ -375,6 +391,7 @@ class MainWindow(QtW.QMainWindow):
         self.worker.failed.connect(self.item_failed)
         self.worker.scan_result.connect(self.scan_ready)
         self.worker.progress.connect(self.update_progress)
+        self.worker.sampling_progress.connect(self.sampling_progress)
         self.worker.finished.connect(self.batch_finished)
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
@@ -390,6 +407,7 @@ class MainWindow(QtW.QMainWindow):
             action.setEnabled(not busy)
         self.settings.setEnabled(not busy)
         self.cancel_action.setEnabled(busy)
+        self.stop_button.setEnabled(busy)
         self.remove_files_button.setEnabled(not busy)
         self.remove_history_button.setEnabled(not busy)
         self.history_list.setEnabled(not busy)
@@ -398,6 +416,11 @@ class MainWindow(QtW.QMainWindow):
     def update_progress(self, done, total):
         self.progress.setRange(0, total)
         self.progress.setValue(done)
+
+    @QtCore.Slot(int, int, str)
+    def sampling_progress(self, done, total, message):
+        self.update_progress(done, total)
+        self.statusBar().showMessage(message)
 
     @QtCore.Slot(int, str)
     def item_started(self, index, name):
@@ -596,7 +619,7 @@ class MainWindow(QtW.QMainWindow):
         QtW.QMessageBox.about(self, "About DRT Analyzer", f"DRT Analyzer {__version__}\n\n"
             "Transparent, reproducible and mathematically verifiable DRT analysis.\n"
             "Tikhonov / nonnegative RBF · local Windows desktop application.\n"
-            "Bayesian DRT and uncertainty are not available in this release.\n"
+            "Bayesian DRT: conditional Gaussian posterior with exact reflecting HMC.\n"
             "Physical interpretation of peaks remains with the researcher.")
 
     def help_math(self):

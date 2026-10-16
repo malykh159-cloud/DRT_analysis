@@ -1,5 +1,40 @@
 # Verification — 2026-10-15
 
+## 0.4.0 Bayesian DRT
+
+- Complete test suite: 127 passed (45.62 seconds) before portable packaging.
+- Portable build and embedded Bayesian smoke passed. Native dependency audit:
+  186 binaries, all from the project Python/venv or Windows. Build artifacts:
+  `artifacts/portable_smoke_DRTAnalyzer_20261016_111041_274/`.
+- Native Windows Qt smoke passed with Python environment variables removed and
+  PATH restricted to Windows (`artifacts/bayesian_portable_windows/`). Bayesian
+  smoke Rp = 84.051575 Ohm for a deliberately short 30/80 x 2-chain run;
+  convergence warnings remain visible for these small testing budgets.
+- EXE SHA-256:
+  `9837f7a568aa112acc529711515b08ecb4161a904a8679eba89b773c440e6927`.
+- Before implementation: all 110 existing tests passed. Three numerical
+  Tikhonov snapshots were captured before changing the pipeline; regression
+  checks compare complete gamma/reconstruction/residual/tau arrays and scalars.
+- Added analytic half-normal, single/two RC, controlled-noise width, same/different
+  seed, multiple-chain diagnostics, all six unchanged MAP lambda selectors,
+  current-chain cancellation, GUI responsiveness, restart, band and history tests.
+- Unmodified pyDRTtools HMC at commit 445ecce0b9ba01d741530183dd5cc49d5b8d5ea0
+  compared on the same joint conditional posterior: mean relative L2 0.3643%,
+  credible bounds 0.7788%, identical peak tau 0.00493727 s, Rp 16.12217 vs
+  16.12510 Ohm, combined Rp MCSE 0.004535 Ohm. All pointwise mean differences
+  were within 4 combined MCSE; R-hat max 1.00412, minimum bulk/tail ESS
+  3447/3139. Known finite-RBF truth was within the pointwise band on this case.
+- Stronger lambda .001 produced prior-induced undercoverage (72.7%) despite
+  reference agreement. This limitation and the sensitivity investigation are
+  disclosed in docs/BAYESIAN_DRT.md; no comparison tolerance was enlarged.
+- Source full smoke passed (`artifacts/bayesian_source_smoke_polygon/`), including
+  actual Bayesian solve, Qt-rendered credible band and existing XLSX export.
+- Render investigation caught a native Qt 6.12 crash with FillBetweenItem.
+  The band now uses a supported enclosed PlotDataItem; GUI tests render/grab the
+  actual plot to guard against this failure, in addition to numerical tests.
+- No importer/exporter, Tikhonov solver, RBF/epsilon, lambda selector or Lin-KK
+  implementation files were changed; no new runtime dependency was introduced.
+
 ## 0.3.0 functional update
 
 - 110 tests passed, including headerless TXT separators, UTF-8/UTF-16, both

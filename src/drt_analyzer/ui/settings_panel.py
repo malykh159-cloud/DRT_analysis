@@ -3,6 +3,7 @@ from PySide6 import QtCore, QtGui, QtWidgets as QtW
 from ..drt.base import AnalysisSettings
 from ..drt.rbf import RBF_NAMES
 from .parameter_help import add_parameter
+from .bayesian_panel import BayesianPanel
 
 
 def combo(items, tooltip=""):
@@ -40,9 +41,7 @@ class SettingsPanel(QtW.QWidget):
             return form
 
         form = section("METHOD")
-        method = combo(["Tikhonov", "Bayesian DRT — not implemented"])
-        method.model().item(1).setEnabled(False)
-        method.setItemData(1, "Алгоритм пока не реализован: в коде только заглушка. Установка дополнительных пакетов не включит этот метод.", QtCore.Qt.ItemDataRole.ToolTipRole)
+        method = self.method = combo(["Tikhonov", "Bayesian DRT"])
         add_parameter(form, "DRT", method, "method")
         positive = QtW.QLabel("γ(τ) ≥ 0 · separate series L")
         form.addRow(positive)
@@ -82,6 +81,11 @@ class SettingsPanel(QtW.QWidget):
         add_parameter(form, "Scan log₁₀ λ max", self.scan_max, "scan_max")
         add_parameter(form, "Scan values", self.scan_count, "scan_count")
 
+        self.bayesian = BayesianPanel()
+        layout.addWidget(self.bayesian)
+        self.method.currentTextChanged.connect(lambda text: self.bayesian.setVisible(text == "Bayesian DRT"))
+        self.bayesian.changed.connect(self._edited)
+        self.method.activated.connect(self._edited)
         form = section("RBF")
         self.rbf = combo(RBF_NAMES, "Positive radial basis functions in ln τ. "
                          "Choice affects resolution and smoothness; compare stability across bases.")
@@ -181,7 +185,7 @@ class SettingsPanel(QtW.QWidget):
                 upper = float(self.frequency_max.text().replace(",", "."))
             except ValueError as exc:
                 raise ValueError("Frequency bounds must be numbers in Hz, e.g. 0.1 and 1e5.") from exc
-        settings = replace(self._base, mode="Manual", lambda_method=self.lambda_method.currentText(), lambda_value=lam,
+        settings = replace(self._base, mode="Manual", method=self.method.currentText(), bayesian=self.bayesian.value(), lambda_method=self.lambda_method.currentText(), lambda_value=lam,
             lambda_min_exp=self.scan_min.value(), lambda_max_exp=self.scan_max.value(), lambda_count=self.scan_count.value(),
             rbf=self.rbf.currentText(), shape_mode=self.shape_mode.currentText(), shape_value=self.shape.value(),
             derivative_order=int(self.order.currentText()), validation=self.validation.isChecked(),
@@ -195,6 +199,9 @@ class SettingsPanel(QtW.QWidget):
     def load(self, settings, actual=None):
         self._loading = True
         self._base = settings
+        self.method.setCurrentText(settings.method)
+        self.bayesian.setVisible(settings.method == "Bayesian DRT")
+        self.bayesian.load(settings.bayesian, actual.uncertainty if actual else None)
         self.frequency_range.setChecked(settings.frequency_min_hz is not None or settings.frequency_max_hz is not None)
         if settings.frequency_min_hz is not None:
             self.frequency_min.setText(repr(settings.frequency_min_hz))

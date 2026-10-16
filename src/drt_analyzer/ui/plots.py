@@ -134,7 +134,16 @@ class SpectrumPlots(QtW.QWidget):
         x = 1/(2*np.pi*v.tau) if is_frequency else v.tau
         self.hovers[self.drt].mode = "frequency" if is_frequency else "tau"
         self.drt.setLabel("bottom", "Frequency" if is_frequency else "τ", units="Hz" if is_frequency else "s")
-        curve = line(self.drt, x, v.gamma, f"DRT · λ={v.lambda_value:.3g}", COLORS[0])
+        name = "Bayesian DRT — posterior mean" if v.uncertainty is not None else f"DRT · λ={v.lambda_value:.3g}"
+        curve = line(self.drt, x, v.gamma, name, COLORS[0])
+        if v.uncertainty is not None:
+            # A single enclosed PlotDataItem follows both credible boundaries,
+            # supports the existing log-axis transform and native legend samples.
+            band = self.drt.plot(np.r_[x, x[::-1]],
+                np.r_[v.uncertainty.credible_upper, v.uncertainty.credible_lower[::-1]],
+                pen=None, fillLevel="enclosed", fillBrush=pg.mkBrush(25, 110, 155, 45),
+                name=f"{v.uncertainty.credible_interval:g}% credible interval")
+            band.setZValue(-1)
         self.hovers[self.drt].add_curve(curve, x, v.gamma, 1/(2*np.pi*v.tau), raw.name)
         if v.peaks:
             scatter = pg.ScatterPlotItem(

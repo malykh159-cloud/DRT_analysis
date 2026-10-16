@@ -1,4 +1,4 @@
-# DRT Analyzer 0.3.0
+# DRT Analyzer 0.4.0
 
 Локальное Windows desktop-приложение для анализа EIS методом распределения времён
 релаксации. PySide6 + pyqtgraph, отдельное NumPy/SciPy ядро. Исходные измерения
@@ -215,11 +215,21 @@ Windows. `scripts/verify_bundle.py` проверяет происхождени�
 
 ## Ограничения
 
-Bayesian DRT не реализован: `drt/bayesian.py` содержит только заглушку движка.
-Нет модели правдоподобия, априорного распределения и выборки из апостериорного
-распределения. Установка дополнительных пакетов не включит этот метод. Сравнение с
-установленным pyDRTtools не выполняется; независимые проверки используют
-adaptive quadrature и прямую матричную формулу на одинаковом конечном окне.
+Bayesian DRT доступен в METHOD → DRT. Его блок настроек появляется между
+REGULARIZATION и RBF. По умолчанию: Warm-up 1000, Samples 2000 на цепочку,
+Chains 4, Seed 42, Credible interval 95%. Advanced закрыт; σ автоматически
+оценивается по остаткам MAP. Run analysis / Auto Selected / Auto All учитывают
+выбранный метод. Stop рядом с progress bar останавливает текущий sampler.
+
+На DRT показаны posterior mean и поточечный credible interval. В Results / decisions
+и Warnings проверяйте R-hat и ESS. Интервал условен на выбранные λ, базис и шум;
+не включает неопределённость физической модели. Bayesian медленнее Tikhonov,
+особенно при малом λ; результаты с плохой сходимостью доступны со статусом Review.
+Подробности и источники: [Bayesian DRT](docs/BAYESIAN_DRT.md).
+
+Reference-проверка: `python scripts/validate_bayesian_reference.py` сравнивает
+posterior mean, пики, Rp и интервалы с закреплённым sampler pyDRTtools при
+одинаковых матрицах и posterior. Импорт, экспорт и Tikhonov defaults не менялись.
 Не реализованы circuit fitting, автоматическая физическая интерпретация,
 ручное разделение пиков, проекты/БД и installer.
 

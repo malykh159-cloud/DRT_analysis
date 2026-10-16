@@ -1,10 +1,14 @@
 # Third-party notices and scientific references
 
-DRT Analyzer's application and numerical code were independently implemented.
-No pyDRTtools or impedance.py source code is embedded or adapted. RBF definitions
-and algorithm formulas were checked against publications and the authors'
-public source, with numerical implementation differences disclosed in
-docs/MATHEMATICS.md.
+The Tikhonov, RBF and analysis infrastructure is independently implemented.
+The Bayesian exact Gaussian reflecting sampler is adapted from pyDRTtools
+HMC.py (Francesco Ciucci, Ting Hei Wan, Baptiste Py, Adeleke Maradesa), MIT,
+copyright (c) 2023 ciuccislab, commit 445ecce0b9ba01d741530183dd5cc49d5b8d5ea0.
+Modifications include local RNG states, cooperative cancellation, elementwise
+feasibility checks, outward root selection, bounded work and equivalent
+constraint-coordinate reflections. Unmodified HMC.py and nearest_PD.py are
+included under tests/reference_pydrttools solely for reference validation.
+Scientific formulation and implementation differences: docs/BAYESIAN_DRT.md.
 
 Scientific references:
 
@@ -30,3 +34,27 @@ Portable builds use dynamically linked Qt libraries; keep the full distribution
 and its included license/metadata files. No Qt WebEngine/PDF components are
 used by the application. System fonts are loaded from Windows, not redistributed.
 Build tooling is not an additional scientific dependency.
+
+## pyDRTtools MIT license (Bayesian sampler adaptation)
+
+MIT License
+
+Copyright (c) 2023 ciuccislab
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

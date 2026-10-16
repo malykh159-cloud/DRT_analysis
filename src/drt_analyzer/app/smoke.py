@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from PySide6 import QtCore, QtWidgets as QtW
 from ..data.models import RawSpectrum, ImportInfo
-from ..drt.base import AnalysisSettings
+from ..drt.base import AnalysisSettings, BayesianSettings
 from ..analysis.pipeline import analyze
 from ..export.tables import export_xlsx, export_txt_bundle
 from ..export.settings import export_settings
@@ -99,6 +99,24 @@ def run_smoke(window, output):
     assert window.current.history.current is v
     window.remove_selected_spectra()
     assert window.current is None and not window.entries
+    # Exercise the real Bayesian solver, credible plot and history in the bundle.
+    bf = np.geomspace(1e3, .1, 21)
+    bz = 5+80/(1+2j*np.pi*bf*.01)
+    braw = RawSpectrum("Bayesian smoke.txt", "synthetic", bf, bz.real, bz.imag, raw.info)
+    bs = AnalysisSettings(method="Bayesian DRT", lambda_method="Manual", lambda_value=.001,
+        validation=False, bayesian=BayesianSettings(warmup=30, samples=80, chains=2))
+    bv = analyze(braw, bs)
+    assert abs(bv.rp_total/80-1) < .08 and len(bv.peaks) == 1
+    assert bv.uncertainty.coefficient_draws.shape[:2] == (2, 80)
+    window.entries.append(Entry(braw))
+    window.refresh_table()
+    window.table.setCurrentCell(0, 0)
+    window.result_ready(0, bv)
+    window.plots.tabs.setCurrentIndex(2)
+    QtW.QApplication.processEvents()
+    window.grab().save(str(output/"bayesian_workspace.png"))
+    export_plot(window.plots.drt.plotItem, output/"bayesian_drt.png")
+    export_xlsx(output/"bayesian_results.xlsx", [(braw, bv)])
     result = {"passed": True, "software_version": __version__, "frozen": bool(getattr(sys, "frozen", False)),
               "python_executable": sys.executable, "rp_total": v.rp_total, "peaks": len(v.peaks),
               "relative_rms": v.quality["relative_rms"], "kk_status": v.kk.status,
@@ -107,4 +125,6 @@ def run_smoke(window, output):
               "sign_majority": "passed", "delete_history": "passed", "delete_spectra": "passed",
               "parameter_help": "passed", "frequency_hover": "passed"}
     result.update(headerless_import="passed", bulk_export="passed", manual_settings="passed")
+    result.update(bayesian_calculation="passed", bayesian_rp=bv.rp_total,
+                  bayesian_diagnostics=bv.uncertainty.diagnostics)
     (output/"smoke_result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")

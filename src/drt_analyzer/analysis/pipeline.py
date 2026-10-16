@@ -20,7 +20,7 @@ def auto_settings(frequency_min_hz=None, frequency_max_hz=None):
                             frequency_min_hz=frequency_min_hz, frequency_max_hz=frequency_max_hz)
 
 
-def analyze(raw, settings, cancel=None):
+def analyze(raw, settings, cancel=None, progress=None):
     settings.validate()
     check_cancel(cancel)
     f, z, preprocessing = prepare(raw, settings)
@@ -34,6 +34,10 @@ def analyze(raw, settings, cancel=None):
     selection = select_lambda(problem, settings, cancel)
     check_cancel(cancel)
     x = solve(problem.a, problem.y, problem.penalty, selection.value)
+    uncertainty = None
+    if settings.method == "Bayesian DRT":
+        from ..drt.bayesian import posterior
+        x, uncertainty = posterior(problem, matrices, selection.value, x, settings.bayesian, cancel, progress)
     offset = 2 if problem.has_inductance else 1
     gamma = matrices.basis @ x[offset:]*problem.impedance_scale
     reconstructed = problem.impedance_matrix@x*problem.impedance_scale
@@ -41,6 +45,8 @@ def analyze(raw, settings, cancel=None):
     rp = integrate_rp(matrices.ln_tau, gamma)
     peaks, peak_warnings = detect_peaks(matrices.tau, gamma, settings)
     warnings = list(raw.warnings)+induction["warnings"]+list(selection.warnings)+list(peak_warnings)
+    if uncertainty is not None:
+        warnings.extend(uncertainty.warnings)
     if preprocessing["excluded_indices"]:
         warnings.append(f"User frequency range: {f.min():.7g}–{f.max():.7g} Hz; "
                         f"{len(f)}/{len(raw.frequency)} source points used. Rp depends on this selected window.")
@@ -58,7 +64,7 @@ def analyze(raw, settings, cancel=None):
                            selection.value, matrices.epsilon, float(x[0]*problem.impedance_scale),
                            float(x[1]*problem.impedance_scale*problem.inductance_scale) if problem.has_inductance else 0.,
                            rp, peaks, quality, preprocessing, kk, selection, tuple(dict.fromkeys(warnings)),
-                           float(np.linalg.norm(problem.penalty@x)))
+                           float(np.linalg.norm(problem.penalty@x)), uncertainty)
 
 
 def lambda_scan(raw, settings, cancel=None, progress=None):

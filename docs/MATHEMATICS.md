@@ -164,8 +164,9 @@ all bases/orders, reconstruction, lambda criteria, cancellation, GUI/history,
 exports, direct dense smoother formulas and independent scipy.quad kernel
 integration on **the same finite window**. The latter is not a full pyDRTtools
 comparison: its unbounded basis integration has different edge behavior.
-Bayesian DRT remains unavailable until a validated prior/likelihood/sampler and
-coverage checks exist. No uncertainty bands are fabricated.
+Conditional Bayesian DRT uses the same matrices and a Gaussian smoothing prior,
+with exact reflecting HMC and pointwise posterior quantiles. Formulation,
+diagnostics, reference comparison and limitations: [BAYESIAN_DRT.md](BAYESIAN_DRT.md).
 
 Cursor readouts are display helpers. On Nyquist, nearest experimental frequency
 is chosen by Euclidean screen distance, accounting for both view scales. No

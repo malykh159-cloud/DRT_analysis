@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 — 2026-10-16
+
+- Conditional Bayesian DRT with positive joint Rs/L/RBF posterior, adapted
+  exact reflecting Gaussian HMC, independent RNG chains, and credible intervals.
+- Bayesian-only settings block, advanced controls, diagnostics, and existing
+  history/plots/batch integration. Cooperative Stop beside the progress bar.
+- Rank/folded split R-hat, bulk/tail ESS and numerical-transition warnings.
+- Pinned pyDRTtools reference comparison and preimplementation Tikhonov snapshots.
+- Import/export implementations, RBF/epsilon, Tikhonov selectors/defaults and
+  existing layout remain unchanged apart from the requested Bayesian controls.
+
 ## 0.3.0 — 2026-10-15
 
 - Import headerless three-column DRTtools TXT and BOM-marked UTF-16/UTF-32.
