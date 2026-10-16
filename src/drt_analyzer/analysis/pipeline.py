@@ -67,17 +67,25 @@ def analyze(raw, settings, cancel=None, progress=None):
                            float(np.linalg.norm(problem.penalty@x)), uncertainty)
 
 
-def lambda_scan(raw, settings, cancel=None, progress=None):
+def lambda_scan(raw, settings, cancel=None, progress=None, sampling_progress=None):
     """Full cached variants: moving the GUI slider never recomputes a fit."""
     settings.validate()
     variants = []
     # Diagnostic is invariant to lambda and is performed once.
     diagnostic = None
+    bayesian = settings.method == "Bayesian DRT"
+    units = settings.bayesian.chains*(settings.bayesian.warmup+settings.bayesian.samples)+1 if bayesian else 1
     for i, lam in enumerate(np.logspace(settings.lambda_min_exp, settings.lambda_max_exp, settings.lambda_count)):
         check_cancel(cancel)
+        label = f"λ {i+1}/{settings.lambda_count} = {lam:.7g}"
+        def sampling(done, total, message):
+            if sampling_progress:
+                sampling_progress(i*units+done, settings.lambda_count*units, f"{label} · {message}")
+        if bayesian and sampling_progress:
+            sampling(0, units, "Preparing spectrum / Lin-KK / MAP")
         s = replace(settings, mode="Manual", lambda_method="Manual", lambda_value=float(lam),
                     validation=settings.validation and i == 0)
-        v = analyze(raw, s, cancel)
+        v = analyze(raw, s, cancel, sampling if bayesian and sampling_progress else None)
         if i == 0:
             diagnostic = v.kk
         if diagnostic is not None and i:

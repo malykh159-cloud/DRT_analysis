@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from scipy.stats import halfnorm
 from conftest import synthetic
-from drt_analyzer.analysis.pipeline import analyze
+from drt_analyzer.analysis.pipeline import analyze, lambda_scan
 from drt_analyzer.drt.base import AnalysisSettings, BayesianSettings, Cancelled
 from drt_analyzer.drt.truncated_hmc import sample_chain
 from drt_analyzer.drt.chain_diagnostics import diagnose
@@ -109,6 +109,25 @@ def test_cancel_within_current_chain():
     with pytest.raises(Cancelled):
         analyze(synthetic(f=np.geomspace(1e3, .1, 31)), settings(), cancel)
     assert calls == 31
+
+
+def test_scan_progress_inside_first_lambda():
+    raw = synthetic(f=np.geomspace(1e3, .1, 21))
+    s = replace(settings(), lambda_min_exp=-3, lambda_max_exp=-2, lambda_count=7,
+                bayesian=BayesianSettings(warmup=3, samples=20, chains=1))
+    completed, events = [], []
+    variants = lambda_scan(raw, s, progress=lambda done, total: completed.append(done),
+        sampling_progress=lambda done, total, message: events.append((len(completed), done, total, message)))
+    assert len(variants) == 7 and completed == list(range(1, 8))
+    assert any(n == 0 and done > 0 and "λ 1/7" in message and "Chain 1/1" in message
+               for n, done, total, message in events)
+    assert any("Diagnostics / credible interval" in message for _, _, _, message in events)
+    assert [done for _, done, _, _ in events] == sorted(done for _, done, _, _ in events)
+    assert len({total for _, _, total, _ in events}) == 1
+    assert events[-1][1] == events[-1][2]
+    for v in variants:
+        assert v.settings.method == "Bayesian DRT" and v.uncertainty is not None
+    np.testing.assert_allclose([v.lambda_value for v in variants], np.logspace(-3, -2, 7))
 
 
 @pytest.mark.parametrize("method", ["Manual", "GCV", "mGCV", "rGCV", "L-curve", "k-fold"])

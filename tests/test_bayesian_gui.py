@@ -90,3 +90,42 @@ def test_bayesian_auto_all_dispatch_only_bayesian(app, monkeypatch):
     assert len(jobs) == 2
     assert all(s.method == "Bayesian DRT" and s.bayesian == fast_settings().bayesian for _, _, s in jobs)
     window.close()
+
+
+def test_lambda_scan_live_progress_before_first_lambda_and_stop(app):
+    window = MainWindow()
+    window.show()
+    raw = synthetic(f=np.geomspace(1e3, .1, 21))
+    window.entries = [Entry(raw)]
+    window.refresh_table()
+    window.table.setCurrentCell(0, 0)
+    old = analyze(raw, AnalysisSettings(validation=False))
+    window.result_ready(0, old)
+    # Exercise the same live first-lambda path with a cheap trajectory, so the
+    # event-delivery assertion is independent of pathological sampler runtimes.
+    window.settings.load(replace(fast_settings(), lambda_count=10, lambda_min_exp=-3,
+        lambda_max_exp=-2, bayesian=BayesianSettings()))
+    ticks = []
+    timer = QtCore.QTimer()
+    timer.timeout.connect(lambda: ticks.append(1))
+    timer.start(5)
+    try:
+        window.scan()
+        assert window.thread is not None
+        try:
+            wait_until(app, lambda: "λ 1/10" in window.statusBar().currentMessage() and
+                       "Chain 1/4" in window.statusBar().currentMessage(), timeout=10)
+        except AssertionError as exc:
+            raise AssertionError((window.statusBar().currentMessage(), window.progress.value(),
+                                  window.progress.maximum(), window.current.error)) from exc
+        assert window.progress.value() > 0
+        assert ticks and window.current.history.current is old
+        window.stop_button.click()
+        wait_until(app, lambda: window.thread is None, timeout=5)
+        assert window.current.history.current is old and window.current.status == "Cancelled"
+        assert window._pending_scan is None
+    finally:
+        timer.stop()
+        window.cancel()
+        wait_until(app, lambda: window.thread is None, timeout=5)
+        window.close()

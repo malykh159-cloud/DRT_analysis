@@ -7,7 +7,7 @@ import numpy as np
 from PySide6 import QtCore, QtWidgets as QtW
 from ..data.models import RawSpectrum, ImportInfo
 from ..drt.base import AnalysisSettings, BayesianSettings
-from ..analysis.pipeline import analyze
+from ..analysis.pipeline import analyze, lambda_scan
 from ..export.tables import export_xlsx, export_txt_bundle
 from ..export.settings import export_settings
 from ..export.plots import export_plot
@@ -117,6 +117,15 @@ def run_smoke(window, output):
     window.grab().save(str(output/"bayesian_workspace.png"))
     export_plot(window.plots.drt.plotItem, output/"bayesian_drt.png")
     export_xlsx(output/"bayesian_results.xlsx", [(braw, bv)])
+    scan_events = []
+    scan_settings = replace(bs, lambda_min_exp=-3, lambda_max_exp=-2, lambda_count=7,
+                            bayesian=BayesianSettings(warmup=0, samples=20, chains=1))
+    scanned = lambda_scan(braw, scan_settings,
+        sampling_progress=lambda done, total, message: scan_events.append((done, total, message)))
+    assert len(scanned) == 7 and all(item.uncertainty is not None for item in scanned)
+    assert any(done > 0 and "λ 1/7" in message and "Chain 1/1" in message
+               for done, total, message in scan_events)
+    assert scan_events[-1][0] == scan_events[-1][1]
     result = {"passed": True, "software_version": __version__, "frozen": bool(getattr(sys, "frozen", False)),
               "python_executable": sys.executable, "rp_total": v.rp_total, "peaks": len(v.peaks),
               "relative_rms": v.quality["relative_rms"], "kk_status": v.kk.status,
@@ -127,4 +136,5 @@ def run_smoke(window, output):
     result.update(headerless_import="passed", bulk_export="passed", manual_settings="passed")
     result.update(bayesian_calculation="passed", bayesian_rp=bv.rp_total,
                   bayesian_diagnostics=bv.uncertainty.diagnostics)
+    result["bayesian_scan_live_progress"] = "passed"
     (output/"smoke_result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")

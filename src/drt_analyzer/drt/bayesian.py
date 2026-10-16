@@ -41,10 +41,13 @@ def gaussian_posterior(problem, lam, map_x, settings):
 
 
 def posterior(problem, matrices, lam, map_x, settings, cancel=None, progress=None):
+    iterations = settings.warmup+settings.samples
+    total_units = settings.chains*iterations+1
+    if progress:
+        progress(0, total_units, "Preparing posterior")
     mean, covariance, sigma = gaussian_posterior(problem, lam, map_x, settings)
     chains, reports = [], []
     children = np.random.SeedSequence(settings.seed).spawn(settings.chains)
-    iterations = settings.warmup+settings.samples
     for chain, child in enumerate(children):
         check_cancel(cancel)
         rng = np.random.default_rng(child)
@@ -54,13 +57,15 @@ def posterior(problem, matrices, lam, map_x, settings, cancel=None, progress=Non
                 phase = "Warm-up" if done <= settings.warmup else "Sampling"
                 phase_done = done if done <= settings.warmup else done-settings.warmup
                 phase_total = settings.warmup if done <= settings.warmup else settings.samples
-                progress(chain*iterations+done, settings.chains*iterations,
+                progress(chain*iterations+done, total_units,
                          f"Chain {chain+1}/{settings.chains} · {phase} {phase_done}/{phase_total}")
         draws, info = sample_chain(mean, covariance, initial, settings, rng, cancel, report)
         chains.append(draws)
         reports.append(info)
     draws = np.stack(chains)
     check_cancel(cancel)
+    if progress:
+        progress(total_units-1, total_units, "Diagnostics / credible interval")
     rhat, bulk, tail = diagnose(draws)
     r_values = [] if rhat is None else [rhat]
     ess_bulk, ess_tail = [bulk], [tail]
@@ -101,6 +106,8 @@ def posterior(problem, matrices, lam, map_x, settings, cancel=None, progress=Non
                    "convergence_ok": max_rhat is not None and max_rhat <= 1.01 and min_bulk >= 400 and min_tail >= 400 and not problematic}
     result = BayesianResult(np.array(lower), np.array(upper), draws, diagnostics, sigma,
                             settings.credible_interval, tuple(warnings))
+    if progress:
+        progress(total_units, total_units, "Posterior complete")
     return draws.mean(axis=(0, 1)), result
 
 

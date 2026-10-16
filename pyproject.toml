@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "drt-analyzer"
-version = "0.4.1"
+version = "0.4.2"
 description = "Transparent, reproducible EIS distribution of relaxation times analysis"
 requires-python = ">=3.11"
 dependencies = ["numpy>=2.0", "scipy>=1.14", "PySide6>=6.8", "pyqtgraph>=0.14", "openpyxl>=3.1"]

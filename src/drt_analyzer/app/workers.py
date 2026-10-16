@@ -36,8 +36,12 @@ class AnalysisWorker(QtCore.QObject):
                 self.started_item.emit(index, raw.name)
                 try:
                     if self.scan:
+                        bayesian = settings.method == "Bayesian DRT"
+                        def scan_progress(done, total, message):
+                            self.sampling_progress.emit(done, total, f"{raw.name} · {message}")
                         variants = lambda_scan(raw, settings, self.cancel_event.is_set,
-                                               lambda done, total: self.progress.emit(done, total))
+                            None if bayesian else lambda done, total: self.progress.emit(done, total),
+                            scan_progress if bayesian else None)
                         self.scan_result.emit(index, variants)
                     else:
                         def sampling(done, total, message):

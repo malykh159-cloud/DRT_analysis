@@ -380,6 +380,7 @@ class MainWindow(QtW.QMainWindow):
         for i, _, _ in jobs:
             self.entries[i].status = "Queued"
             self.entries[i].error = ""
+        self.progress.setFormat("%p%")
         self.progress.setRange(0, jobs[0][2].lambda_count if scan else len(jobs))
         self.progress.setValue(0)
         self.thread = QtCore.QThread(self)
@@ -414,12 +415,14 @@ class MainWindow(QtW.QMainWindow):
 
     @QtCore.Slot(int, int)
     def update_progress(self, done, total):
+        self.progress.setFormat("%p%")
         self.progress.setRange(0, total)
         self.progress.setValue(done)
 
     @QtCore.Slot(int, int, str)
     def sampling_progress(self, done, total, message):
         self.update_progress(done, total)
+        self.progress.setFormat(f"{100*done/max(total, 1):.2f}%")
         self.statusBar().showMessage(message)
 
     @QtCore.Slot(int, str)

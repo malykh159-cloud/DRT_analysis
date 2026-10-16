@@ -1,5 +1,28 @@
 # Verification — 2026-10-15
 
+## 0.4.2 Bayesian Lambda Scan progress
+
+- Complete regression suite: 129 passed (60.51 seconds).
+- Reproduced on the reported private 60-point spectrum without modifying source
+  data: a 20-transition probe used 633 reflections at lambda 5.6234e-5 versus
+  36765 at lambda 1e-8. A wide scan cannot be timed by multiplying the cost of
+  a single run at a different lambda.
+- Fixed missing callback forwarding in lambda_scan/worker. The status now shows
+  lambda index/value, chain, warm-up/sampling and diagnostics; percentages use
+  fractional values. Global progress remains monotone across lambda boundaries.
+- Added regression coverage for live progress before the first lambda completes,
+  full Bayesian variants on all scan nodes, GUI responsiveness, cooperative Stop
+  and preservation of the previous result. A real-spectrum Qt event-loop check
+  observed first-chain status after about 3.4 s and stopped successfully.
+- GUI checks use a well-conditioned lambda to isolate event delivery from
+  expensive trajectories. Full frozen smoke also exercises scan progress.
+- Model, numerical sampler, budgets, scan bounds, Tikhonov and import/export
+  behavior remain unchanged. Screenshot: `artifacts/lambda_scan_progress_0_4_2/`.
+- Portable build passed its 186-native-dependency audit and embedded scan smoke
+  (`artifacts/portable_smoke_DRTAnalyzer_20261016_120542_276/`). Native Windows Qt
+  smoke also passed with isolated PATH, including Bayesian scan live progress
+  (`artifacts/scan_0_4_2_windows/`).
+
 ## 0.4.1 settings panel update
 
 - Complete test suite: 127 passed (46.56 seconds), including help dialogs for all

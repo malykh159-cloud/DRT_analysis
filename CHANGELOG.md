@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.2 — 2026-10-16
+
+- Forward live Bayesian chain/warm-up/sampling progress through Lambda Scan,
+  including the current lambda and diagnostics stage before the first fit ends.
+- Display fractional sampling percentages without resetting at lambda boundaries.
+- Regression tests for first-lambda GUI activity, immediate Stop and retention
+  of the previous result; frozen smoke exercises Bayesian scan progress too.
+- Bayesian target, sampler settings, scan bounds and Tikhonov behavior unchanged.
+
 ## 0.4.1 — 2026-10-16
 
 - Collapsible Frequency Range, Validation and Peaks; display-only folding
