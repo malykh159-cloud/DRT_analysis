@@ -1,5 +1,6 @@
 from PySide6 import QtCore, QtWidgets as QtW
 from ..drt.base import BayesianSettings
+from .parameter_help import add_parameter
 
 
 class BayesianPanel(QtW.QGroupBox):
@@ -17,7 +18,7 @@ class BayesianPanel(QtW.QGroupBox):
             box.setToolTip(tip)
             box.valueChanged.connect(lambda *_: self.changed.emit())
             self.controls[name] = box
-            target.addRow(label, box)
+            add_parameter(target, label, box, "bayesian_"+name)
         def real(name, label, lo, hi, decimals, tip, target=form):
             box = QtW.QDoubleSpinBox()
             box.setRange(lo, hi)
@@ -26,7 +27,7 @@ class BayesianPanel(QtW.QGroupBox):
             box.setToolTip(tip)
             box.valueChanged.connect(lambda *_: self.changed.emit())
             self.controls[name] = box
-            target.addRow(label, box)
+            add_parameter(target, label, box, "bayesian_"+name)
             return box
         integer("warmup", "Warm-up", 0, 100000, "Начальные итерации каждой цепочки, отбрасываемые до расчёта posterior. Exact HMC не требует адаптации шага.")
         integer("samples", "Samples / chain", 20, 100000, "Число сохраняемых posterior samples ПОСЛЕ warm-up в каждой цепочке. Увеличьте при низком ESS.")

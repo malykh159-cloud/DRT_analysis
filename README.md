@@ -1,4 +1,10 @@
-# DRT Analyzer 0.4.0
+# DRT Analyzer 0.4.1
+
+Разделы Frequency Range, Validation и Peaks можно раскрывать стрелкой;
+по умолчанию они свёрнуты. Сворачивание сохраняет значения и не отключает
+настройки. В Regularization → Advanced находятся Derivative order,
+Scan log₁₀ λ min/max и Scan values. У каждого Bayesian-параметра, включая
+Advanced, кнопка **?** открывает описание, влияние и практические рекомендации.
 
 Локальное Windows desktop-приложение для анализа EIS методом распределения времён
 релаксации. PySide6 + pyqtgraph, отдельное NumPy/SciPy ядро. Исходные измерения

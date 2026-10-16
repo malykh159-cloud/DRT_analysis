@@ -4,6 +4,7 @@ from ..drt.base import AnalysisSettings
 from ..drt.rbf import RBF_NAMES
 from .parameter_help import add_parameter
 from .bayesian_panel import BayesianPanel
+from .collapsible_section import CollapsibleSection
 
 
 def combo(items, tooltip=""):
@@ -33,7 +34,13 @@ class SettingsPanel(QtW.QWidget):
         self.mode.setStyleSheet("font-weight: 600; color: #225e79;")
         layout.addWidget(self.mode)
 
+        self.sections = {}
         def section(title):
+            if title in {"FREQUENCY RANGE", "VALIDATION", "PEAKS"}:
+                folded = CollapsibleSection(title)
+                self.sections[title] = folded
+                layout.addWidget(folded)
+                return folded.form
             group = QtW.QGroupBox(title)
             form = QtW.QFormLayout(group)
             form.setFieldGrowthPolicy(QtW.QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
@@ -69,6 +76,9 @@ class SettingsPanel(QtW.QWidget):
         add_parameter(form, "Manual λ", self.lambda_value, "lambda_value")
         self.actual_lambda = QtW.QLabel("—")
         form.addRow("Actual λ", self.actual_lambda)
+        self.regularization_advanced = CollapsibleSection("Advanced")
+        form.addRow(self.regularization_advanced)
+        form = self.regularization_advanced.form
         self.order = combo(["0", "1", "2"], "Penalty is ∫|dⁿγ/d(ln τ)ⁿ|² d ln τ. "
                            "0 penalizes magnitude, 1 slope, 2 curvature. Rs and L are unpenalized.")
         add_parameter(form, "Derivative order", self.order, "derivative_order")

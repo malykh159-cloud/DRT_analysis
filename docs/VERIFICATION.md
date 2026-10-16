@@ -1,5 +1,19 @@
 # Verification — 2026-10-15
 
+## 0.4.1 settings panel update
+
+- Complete test suite: 127 passed (46.56 seconds), including help dialogs for all
+  nine Bayesian controls, background calculation/Stop and Tikhonov regressions.
+- Manual Qt check confirmed that folding/unfolding Frequency Range, Validation,
+  Peaks and Regularization Advanced leaves AnalysisSettings unchanged; loading
+  another settings snapshot preserves the user's display folding state.
+- Inspected the compact panel and Advanced/help screenshots under
+  `artifacts/settings_folds_0_4_1/`. Folded controls stay enabled; numerical,
+  import/export and worker implementations were not changed.
+- Portable build passed its embedded smoke and 186 native dependency checks;
+  inspected the actual bundled panel screenshot. Native Windows Qt smoke also
+  passed with isolated PATH (`artifacts/settings_0_4_1_windows/`).
+
 ## 0.4.0 Bayesian DRT
 
 - Complete test suite: 127 passed (45.62 seconds) before portable packaging.

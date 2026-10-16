@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1 — 2026-10-16
+
+- Collapsible Frequency Range, Validation and Peaks; display-only folding
+  preserves all settings and their effect on analysis.
+- Regularization Advanced contains derivative order and lambda scan bounds/count.
+- Detailed Russian help dialogs for all nine basic/advanced Bayesian parameters.
+
 ## 0.4.0 — 2026-10-16
 
 - Conditional Bayesian DRT with positive joint Rs/L/RBF posterior, adapted
