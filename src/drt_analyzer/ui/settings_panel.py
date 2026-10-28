@@ -82,7 +82,7 @@ class SettingsPanel(QtW.QWidget):
         self.order = combo(["0", "1", "2"], "Penalty is ∫|dⁿγ/d(ln τ)ⁿ|² d ln τ. "
                            "0 penalizes magnitude, 1 slope, 2 curvature. Rs and L are unpenalized.")
         add_parameter(form, "Derivative order", self.order, "derivative_order")
-        self.scan_min = spin(-14, 7, -8, 1, 1)
+        self.scan_min = spin(-14, 7, -6, 1, 1)
         self.scan_max = spin(-13, 8, 2, 1, 1)
         self.scan_count = QtW.QSpinBox()
         self.scan_count.setRange(7, 201)

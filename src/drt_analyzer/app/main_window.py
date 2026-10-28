@@ -141,7 +141,14 @@ class MainWindow(QtW.QMainWindow):
         self.peaks.setSelectionBehavior(QtW.QAbstractItemView.SelectionBehavior.SelectRows)
         self.peaks.horizontalHeader().setSectionResizeMode(QtW.QHeaderView.ResizeMode.Stretch)
         self.plots.peak_selected.connect(self.select_peak)
-        details.addTab(self.peaks, "Peaks")
+        peak_page = QtW.QWidget()
+        peak_layout = QtW.QVBoxLayout(peak_page)
+        peak_layout.setContentsMargins(0, 0, 0, 0)
+        peak_layout.addWidget(self.peaks)
+        self.edit_peaks_button = QtW.QPushButton("Manual peaks… (include / exclude / add)")
+        self.edit_peaks_button.clicked.connect(self.edit_peaks)
+        peak_layout.addWidget(self.edit_peaks_button)
+        details.addTab(peak_page, "Peaks")
         self.report = QtW.QPlainTextEdit()
         self.report.setReadOnly(True)
         details.addTab(self.report, "Results / decisions")
@@ -275,7 +282,7 @@ class MainWindow(QtW.QMainWindow):
         self.peaks.setRowCount(len(v.peaks) if v else 0)
         if v:
             for row, p in enumerate(v.peaks):
-                values = [str(p.index), f"{p.tau_s:.6g}", f"{p.frequency_hz:.6g}", f"{p.gamma_ohm:.6g}",
+                values = [str(p.index) + (" (excluded)" if not p.included else ""), f"{p.tau_s:.6g}", f"{p.frequency_hz:.6g}", f"{p.gamma_ohm:.6g}",
                           f"{p.rp_ohm:.6g}", f"{100*p.fraction:.3f}", "unresolved" if p.edge else ""]
                 for col, text in enumerate(values):
                     self.peaks.setItem(row, col, QtW.QTableWidgetItem(text))
@@ -305,6 +312,9 @@ class MainWindow(QtW.QMainWindow):
                     f"Rank/folded split R-hat max = {d['rhat_max']}; "
                     f"bulk ESS min = {d['ess_bulk_min']:.1f}; tail ESS min = {d['ess_tail_min']:.1f}\n"
                     f"Problematic transitions = {d['problematic_transitions']}; divergences N/A (exact dynamics).")
+            self.report.appendPlainText(f"\nSelected peaks: {sum(p.included for p in v.peaks)}/{len(v.peaks)}; "
+                f"selected Rp sum = {sum(p.rp_ohm for p in v.peaks if p.included):.8g} Ohm. "
+                "Full-window Rp includes excluded regions.")
             self.warnings.setPlainText("\n\n".join(v.warnings) or "No diagnostic warnings.")
         else:
             self.report.setPlainText(f"{entry.raw.name}\n{len(entry.raw.frequency)} source points\n"
@@ -322,6 +332,20 @@ class MainWindow(QtW.QMainWindow):
             self.history_list.blockSignals(False)
         self.undo_action.setEnabled(not self.thread and entry.history.position > 0)
         self.redo_action.setEnabled(not self.thread and entry.history.position < len(entry.history.variants)-1)
+
+    def edit_peaks(self):
+        if self.thread or not self.current or not self.current.history.current:
+            return
+        from ..ui.peak_editor import PeakEditor
+        from ..state.analysis_variant import identity
+        dialog = PeakEditor(self.current.raw, self.current.history.current, self)
+        if dialog.exec() == QtW.QDialog.DialogCode.Accepted:
+            variant = self.current.history.current
+            id_, created = identity()
+            note = "Manual peak regions/selection; full DRT and total Rp unchanged. Region splitting is not physical deconvolution."
+            edited = replace(variant, id=id_, created_utc=created, peaks=dialog.result_peaks,
+                             warnings=tuple(w for w in variant.warnings if w != note) + (note,))
+            self.result_ready(self.current_index, edited)
 
     def select_peak(self, index):
         self.details_tabs.setCurrentIndex(0)

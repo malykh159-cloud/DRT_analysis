@@ -57,9 +57,17 @@ def test_exports(tmp_path, rc):
     assert m["import"]["im_multiplier"] == 1
     wb = load_workbook(tmp_path/"result.xlsx", read_only=True, data_only=True)
     assert wb["Summary"].cell(2, 3).value == v.rp_total
-    assert wb["1 DRT"].max_row == len(v.tau)+1
-    assert wb["1 Raw source"].cell(2, 4).value == pytest.approx(rc.imaginary_original[0], rel=1e-14)
-    assert wb["1 Impedance"].max_row == len(rc.frequency)+1
+    assert wb.sheetnames == ["Summary", "001 synthetic.csv"]
+    sheet = wb.worksheets[1]
+    assert sheet.max_row == max(len(v.tau), len(rc.frequency))+1
+    assert sheet.cell(2, 4).value == pytest.approx(rc.imaginary_original[0], rel=1e-14)
+    assert sheet.cell(2, 3).value == pytest.approx(-rc.impedance[0].imag)
+    assert sheet.cell(2, 6).value == pytest.approx(v.frequency[0])
+    assert sheet.cell(2, 7).value == pytest.approx(v.reconstructed[0].real)
+    assert sheet.cell(2, 10).value == pytest.approx(v.tau[0])
+    assert sheet.cell(2, 12).value == pytest.approx(v.gamma[0])
+    assert wb["Summary"].cell(1, 6).value == "Peak 1 f_max (Hz)"
+    assert wb["Summary"].cell(2, 6).value == pytest.approx(v.peaks[0].frequency_hz)
     wb.close()
     assert len(list((tmp_path/"txt").glob("*.txt"))) == 7
     assert safe_cell("=1+1") == "'=1+1"

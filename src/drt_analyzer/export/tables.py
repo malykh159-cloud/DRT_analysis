@@ -17,16 +17,24 @@ def write_txt(path, rows):
         writer.writerows([[safe_cell(v) for v in row] for row in rows])
 
 
-def summary_rows(pairs):
-    max_peaks = max((len(v.peaks) for _, v in pairs), default=0)
+def summary_rows(pairs, cpe=False):
+    max_peaks = max((sum(p.included for p in v.peaks) for _, v in pairs), default=0)
     header = ["File", "Rs (Ohm)", "Rp total (Ohm)", "Lambda"]
     for i in range(1, max_peaks+1):
         header.append(f"Peak {i} Rp (Ohm)")
+        if cpe:
+            header.extend([f"Peak {i} f_max (Hz)", f"Peak {i} Q (S s^n, approx)", f"Peak {i} n (approx)"])
     rows = [header]
     for raw, v in pairs:
         row = [raw.name, v.rs_ohm, v.rp_total, v.lambda_value]
         for peak in v.peaks:
+            if not peak.included:
+                continue
             row.append(peak.rp_ohm)
+            if cpe:
+                from ..analysis.cpe import estimate_cpe
+                q, n, _ = estimate_cpe(v.tau, v.gamma, peak, v.frequency)
+                row.extend([peak.frequency_hz, q, n])
         rows.append(row+[""]*(len(header)-len(row)))
     return rows
 
@@ -45,10 +53,10 @@ def detail_tables(raw, v):
                 v.kk.residuals[i].real, v.kk.residuals[i].imag] if v.kk else [None]*4
         z.append(row)
     peaks = [["Index", "Tau (s)", "Frequency (Hz)", "Gamma peak (Ohm)", "Rp (Ohm)",
-              "Fraction", "Left tau (s)", "Right tau (s)", "Unresolved edge"]]
+              "Fraction", "Left tau (s)", "Right tau (s)", "Unresolved edge", "Included"]]
     for p in v.peaks:
         peaks.append([p.index, p.tau_s, p.frequency_hz, p.gamma_ohm, p.rp_ohm,
-                      p.fraction, p.left_tau_s, p.right_tau_s, p.edge])
+                      p.fraction, p.left_tau_s, p.right_tau_s, p.edge, p.included])
     source = [["Source row (1-based)", "Frequency (Hz)", "Re original (Ohm)", "Imaginary original (Ohm)"]]
     source.extend((i+1, f, re, im) for i, (f, re, im) in enumerate(zip(raw.frequency, raw.real, raw.imaginary_original)))
     selection = [["Lambda", "Selection score", "Residual norm (L-curve)", "Penalty norm (L-curve)"]]
@@ -79,23 +87,49 @@ def _format_sheet(ws):
 
 def export_xlsx(path, pairs):
     from openpyxl import Workbook
+    from openpyxl.comments import Comment
+    from ..analysis.cpe import estimate_cpe
+    import numpy as np
     pairs = list(pairs)
     wb = Workbook()
     ws = wb.active
     ws.title = "Summary"
-    for row in summary_rows(pairs):
+    for row in summary_rows(pairs, cpe=True):
         ws.append([safe_cell(v) for v in row])
-    meta = wb.create_sheet("Settings")
-    meta.append(["File", "Parameter", "Value"])
     for n, (raw, v) in enumerate(pairs, 1):
-        for title, rows in detail_tables(raw, v).items():
-            sheet = wb.create_sheet(f"{n} {title}"[:31])
-            for row in rows:
-                sheet.append([safe_cell(value.item() if hasattr(value, "item") else value) for value in row])
-        for key, value in settings_rows(metadata(raw, v)):
-            meta.append([safe_cell(raw.name), safe_cell(key), safe_cell(value)])
+        selected = [p for p in v.peaks if p.included]
+        ws.cell(n+1, 3).comment = Comment(
+            f"Full finite-window DRT integral, including excluded peaks. Selected Rp sum: "
+            f"{sum(p.rp_ohm for p in selected):.12g} Ohm. Excluded original peak indices: "
+            f"{[p.index for p in v.peaks if not p.included]}", "DRT Analyzer")
+        for i, p in enumerate(selected):
+            _, _, note = estimate_cpe(v.tau, v.gamma, p, v.frequency)
+            for col in (7+4*i, 8+4*i):
+                ws.cell(n+1, col).comment = Comment(note, "DRT Analyzer")
+        title = re.sub(r"[\[\]:*?/\\]", "_", raw.name).strip("'")
+        sheet = wb.create_sheet(f"{n:03d} {title}"[:31])
+        blocks = [
+            (1, ["Experimental f (Hz)", "Experimental Re Z (Ohm)", "Experimental -Im Z (Ohm)", "Imaginary original (Ohm)"],
+             zip(raw.frequency, raw.real, -raw.impedance.imag, raw.imaginary_original)),
+            (6, ["Fit f (Hz)", "Fit Re Z (Ohm)", "Fit -Im Z (Ohm)"],
+             zip(v.frequency, v.reconstructed.real, -v.reconstructed.imag)),
+            (10, ["DRT tau (s)", "DRT f (Hz)", "DRT gamma (Ohm per d ln tau)"],
+             zip(v.tau, 1/(2*np.pi*v.tau), v.gamma))]
+        for start, headers, data in blocks:
+            for j, value in enumerate(headers, start):
+                sheet.cell(1, j, value)
+            for row, values in enumerate(data, 2):
+                for col, value in enumerate(values, start):
+                    sheet.cell(row, col, float(value))
+        sheet.cell(1, 1).comment = Comment(
+            f"{raw.name}\nSHA-256: {raw.source_hash}\nVariant: {v.id}\n"
+            "Experimental block contains all original points. Fit contains only analysis points. "
+            "Blocks have independent frequency/time axes; rows are not paired across blocks. "
+            f"Import convention: {raw.info.im_convention}; multiplier={raw.info.im_multiplier}.", "DRT Analyzer")
     for sheet in wb.worksheets:
         _format_sheet(sheet)
+        if sheet.title != "Summary":
+            sheet.auto_filter.ref = None
     wb.save(path)
 
 

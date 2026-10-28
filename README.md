@@ -1,4 +1,28 @@
-# DRT Analyzer 0.4.2
+# DRT Analyzer 0.5.0
+
+### Manual peaks and compact Excel
+
+- The default lambda scan starts at log10(lambda) = -6; smaller values remain available manually.
+- In the **Peaks** tab, choose **Manual peaks**. Uncheck **Include** to exclude a peak;
+  excluded markers are gray. **Add marker** accepts frequency in Hz, including scientific notation.
+  Adding a marker resets integration boundaries to geometric midpoints; edit Left/Right tau afterwards.
+  The same editor is available inside Lambda Scan, for the currently selected lambda.
+- Each region integrates gamma d ln(tau); regions cannot overlap. A marker on a shoulder
+  partitions the DRT area and does not deconvolve overlapping physical processes.
+  Excluded regions retain their own boundaries and are not reassigned to neighboring peaks.
+  Full-window Rp and the fitted spectrum remain unchanged. Selected Rp is shown separately.
+  Applying edits creates a history snapshot with Undo/Redo; **Reset auto** restores automatic peaks.
+- XLSX contains **Summary** plus one sheet per spectrum. Each spectrum sheet contains
+  independent blocks for all experimental Nyquist points, fitted Nyquist points within
+  the analysis frequency range, and the DRT curve. Nyquist uses Re(Z), -Im(Z); the original
+  imaginary column is retained separately. Do not pair rows across these independent blocks.
+- Summary exports included peaks only, with **Rp, f_max, Q, n** for each. Q and n are an
+  approximate R||CPE projection of the finite DRT region, not an independent circuit fit.
+  Rp and marker tau are fixed; n minimizes complex impedance error over analysis frequencies;
+  Q=tau^n/Rp, in S s^n. Boundary peaks and projections with >10% relative complex error
+  leave Q/n blank. Cell comments explain the estimate and show selected/excluded Rp semantics.
+  The model follows [ZARC equations 33–34](https://doi.org/10.3390/en15030792).
+  These are conditional estimates without propagated Bayesian uncertainty.
 
 В Bayesian Lambda Scan строка состояния показывает текущие λ, цепочку и стадию
 Warm-up/Sampling, включая прогресс внутри первого λ. Для каждого λ выполняется

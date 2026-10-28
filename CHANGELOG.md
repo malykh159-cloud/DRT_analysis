@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 — 2026-10-28
+
+- Default minimum log10(lambda) is -6; lower manual bounds remain allowed.
+- Compact XLSX: Summary and one sheet per spectrum, with independent original Nyquist,
+  fitted Nyquist and DRT data blocks. Summary adds f_max and explicitly approximate CPE Q/n.
+- Manual peak editor in the main window and Lambda Scan: include/exclude, add markers,
+  edit non-overlapping integration boundaries and restore automatic detection.
+- Peak edits preserve the full DRT, total Rp and original measurements; history supports Undo/Redo.
+- Gray excluded markers, selected Rp reporting, exported selection metadata and model limitations.
+
 ## 0.4.2 — 2026-10-16
 
 - Forward live Bayesian chain/warm-up/sampling progress through Lambda Scan,

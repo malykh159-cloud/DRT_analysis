@@ -31,6 +31,9 @@ class LambdaScanDialog(QtW.QDialog):
             for j, value in enumerate((v.lambda_value, 100*v.quality["relative_rms"], v.penalty_norm, v.rp_total, len(v.peaks))):
                 self.table.setItem(i, j, QtW.QTableWidgetItem(f"{value:.6g}"))
         layout.addWidget(self.table)
+        edit = QtW.QPushButton("Manual peaks… (current lambda)")
+        edit.clicked.connect(self.edit_peaks)
+        layout.addWidget(edit)
         buttons = QtW.QDialogButtonBox(QtW.QDialogButtonBox.StandardButton.Apply | QtW.QDialogButtonBox.StandardButton.Close)
         buttons.button(QtW.QDialogButtonBox.StandardButton.Apply).clicked.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -42,6 +45,19 @@ class LambdaScanDialog(QtW.QDialog):
     @property
     def chosen(self):
         return self.variants[self.slider.value()]
+
+    def edit_peaks(self):
+        from dataclasses import replace
+        from .peak_editor import PeakEditor
+        from ..state.analysis_variant import identity
+        dialog = PeakEditor(self.raw, self.chosen, self)
+        if dialog.exec() == QtW.QDialog.DialogCode.Accepted:
+            id_, created = identity()
+            v = replace(self.chosen, id=id_, created_utc=created, peaks=dialog.result_peaks,
+                        warnings=self.chosen.warnings + ("Manual peak regions/selection; full DRT and total Rp unchanged.",))
+            self.variants = list(self.variants)
+            self.variants[self.slider.value()] = v
+            self.select(self.slider.value())
 
     def select(self, index):
         v = self.variants[index]

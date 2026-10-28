@@ -150,7 +150,7 @@ class SpectrumPlots(QtW.QWidget):
                 # ScatterPlotItem has no setLogMode: supply view coordinates.
                 x=[np.log10(p.frequency_hz if is_frequency else p.tau_s) for p in v.peaks],
                 y=[p.gamma_ohm for p in v.peaks], data=list(v.peaks), size=10,
-                brush=COLORS[1], pen="w", hoverable=True, hoverSize=13,
+                brush=[COLORS[1] if p.included else "#999999" for p in v.peaks], pen="w", hoverable=True, hoverSize=13,
                 tip=lambda x, y, data: f"Peak {data.index}{' (edge)' if data.edge else ''}\n"
                     f"τ = {data.tau_s:.6g} s\nf = {data.frequency_hz:.6g} Hz\n"
                     f"γ = {data.gamma_ohm:.6g} Ω\nRp = {data.rp_ohm:.6g} Ω ({100*data.fraction:.2f}%)")

@@ -50,6 +50,22 @@ def run_smoke(window, output):
         for suffix in ("png",):
             export_plot(item, output/f"{name}.{suffix}")
     export_xlsx(output/"results.xlsx", [(raw, v)])
+    # Exercise the compact workbook contract and new editor in the frozen runtime.
+    from openpyxl import load_workbook
+    from ..ui.peak_editor import PeakEditor
+    book = load_workbook(output/"results.xlsx", read_only=True)
+    assert len(book.sheetnames) == 2 and book.sheetnames[0] == "Summary"
+    assert book["Summary"].cell(1, 6).value == "Peak 1 f_max (Hz)"
+    book.close()
+    editor = PeakEditor(raw, v, window)
+    editor.show()
+    editor.table.item(0, 0).setCheckState(QtCore.Qt.CheckState.Unchecked)
+    assert not editor.result_peaks[0].included
+    assert editor.result_peaks[1].included
+    QtW.QApplication.processEvents()
+    editor.grab().save(str(output/"manual_peaks.png"))
+    editor.accept()
+    editor.close()
     export_txt_bundle(output/"txt", [(raw, v)])
     export_settings(output/"settings.json", raw, v)
     # Verify 0.3.0 paths in the frozen runtime, including headerless TXT import.

@@ -19,7 +19,7 @@ def test_tikhonov_unchanged_against_preimplementation_baseline(rc):
     baseline = np.load(Path(__file__).parent/"fixtures"/"tikhonov_before_bayesian.npz")
     for i, kwargs in enumerate(({}, dict(rbf="C6 Matern", shape_mode="Auto"),
                                 dict(derivative_order=1, lambda_method="Manual", lambda_value=1e-5))):
-        v = analyze(rc, AnalysisSettings(validation=False, **kwargs))
+        v = analyze(rc, AnalysisSettings(validation=False, lambda_min_exp=-8, **kwargs))
         for name in ("gamma", "reconstructed", "residuals", "tau"):
             np.testing.assert_allclose(getattr(v, name), baseline[f"{i}_{name}"], rtol=1e-10, atol=1e-11)
         np.testing.assert_allclose([v.lambda_value, v.rp_total, v.rs_ohm, v.shape_value], baseline[f"{i}_scalars"], rtol=1e-10)

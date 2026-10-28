@@ -15,6 +15,36 @@ class Peak:
     left_tau_s: float
     right_tau_s: float
     edge: bool = False
+    included: bool = True
+
+
+def manual_peaks(tau, gamma, regions):
+    """Integrate explicitly selected, non-overlapping ln(tau) regions.
+
+    regions: (tau at marker, left tau, right tau, included). Markers on shoulders
+    describe user-selected regions, not a deconvolution into physical processes.
+    """
+    x = np.log(tau)
+    total = integrate_rp(x, gamma)
+    regions = sorted(regions, key=lambda r: r[1])
+    previous = float(tau[0])
+    result = []
+    for k, (center, left, right, included) in enumerate(regions, 1):
+        if not (np.isfinite([center, left, right]).all()
+                and tau[0] <= left <= center <= right <= tau[-1] and left < right):
+            raise ValueError("Each peak needs left <= marker <= right within the DRT window, and left < right.")
+        if left < previous:
+            raise ValueError("Peak integration regions must not overlap (excluded regions count too).")
+        previous = right
+        inside = (tau > left) & (tau < right)
+        xx = np.r_[np.log(left), x[inside], np.log(right)]
+        yy = np.interp(xx, x, gamma)
+        area = integrate_rp(xx, yy)
+        result.append(Peak(k, float(center), float(1/(2*np.pi*center)),
+                           float(np.interp(np.log(center), x, gamma)), area,
+                           area/total if total else 0., float(left), float(right),
+                           center in (tau[0], tau[-1]), bool(included)))
+    return tuple(result)
 
 
 def detect_peaks(tau, gamma, settings):

@@ -42,7 +42,7 @@ class AnalysisSettings:
     mode: str = "Manual"
     lambda_method: str = "rGCV"
     lambda_value: float = 1e-3
-    lambda_min_exp: float = -8
+    lambda_min_exp: float = -6
     lambda_max_exp: float = 2
     lambda_count: int = 41
     rbf: str = "Gaussian"

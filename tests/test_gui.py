@@ -34,6 +34,44 @@ def wait_until(app, predicate, timeout=15):
     app.processEvents()
 
 
+def test_manual_peak_editor_exclude_add_and_history(app, rc, monkeypatch):
+    from drt_analyzer.ui.peak_editor import PeakEditor
+    v = analyze(rc, AnalysisSettings(lambda_method="Manual", validation=False))
+    dialog = PeakEditor(rc, v)
+    dialog.table.item(0, 0).setCheckState(QtCore.Qt.CheckState.Unchecked)
+    assert not dialog.result_peaks[0].included
+    assert "Selected Rp = 0" in dialog.total.text()
+    marker = np.sqrt(v.peaks[0].tau_s*v.tau[-1])
+    monkeypatch.setattr(QtW.QInputDialog, "getText", lambda *args: (str(1/(2*np.pi*marker)), True))
+    dialog.add_marker()
+    assert len(dialog.result_peaks) == 2
+    assert sum(p.included for p in dialog.result_peaks) == 1
+    assert sum(p.rp_ohm for p in dialog.result_peaks) == pytest.approx(v.rp_total)
+    dialog.accept()
+    assert dialog.result() == QtW.QDialog.DialogCode.Accepted
+    window = MainWindow()
+    window.entries.append(Entry(rc))
+    window.refresh_table()
+    window.table.setCurrentCell(0, 0)
+    window.result_ready(0, v)
+    monkeypatch.setattr(PeakEditor, "exec", lambda self: (self.table.item(0, 0).setCheckState(
+        QtCore.Qt.CheckState.Unchecked), self.accept(), QtW.QDialog.DialogCode.Accepted)[-1])
+    window.edit_peaks()
+    assert not window.current.history.current.peaks[0].included
+    assert window.current.history.current.rp_total == v.rp_total
+    window.undo()
+    assert window.current.history.current is v
+    window.redo()
+    assert not window.current.history.current.peaks[0].included
+    scan = LambdaScanDialog(rc, (v,), window)
+    scan.edit_peaks()
+    assert not scan.chosen.peaks[0].included
+    assert v.peaks[0].included
+    scan.close()
+    dialog.close()
+    window.close()
+
+
 def test_window_history_plots_and_export(app, rc, tmp_path):
     window = MainWindow()
     window.show()
